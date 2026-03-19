@@ -1,13 +1,7 @@
 name: Create steam_desc from README
 
 on:
-  push:
-    branches:
-      - master
-    paths:
-      - 'README.md'
-
-  workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: write

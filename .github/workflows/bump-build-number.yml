@@ -1,29 +1,35 @@
 name: Bump Build Number
+
 on:
-  pull_request:
-    types: [closed]
-    branches:
-      - master
+  workflow_call:
+    inputs:
+      pr_number:
+        description: "Pull Request Number"
+        required: true
+        type: number
+
 permissions:
   contents: write
   pull-requests: read
+
 jobs:
   bump:
-    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
         with:
           token: ${{ github.token }}
           fetch-depth: 0
+
       - name: Get number of commits in this PR
         id: commit-count
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          count=$(gh pr view ${{ github.event.pull_request.number }} --json commits --jq '.commits | length')
+          count=$(gh pr view ${{ inputs.pr_number }} --json commits --jq '.commits | length')
           echo "commit_count=$count" >> $GITHUB_OUTPUT
-          echo "→ Found $count commits in PR #${{ github.event.pull_request.number }}"
+          echo "→ Found $count commits in PR #${{ inputs.pr_number }}"
+
       - name: Bump version by commit count
         id: bump
         if: steps.commit-count.outputs.commit_count > 0
@@ -50,6 +56,7 @@ jobs:
             sed -i "s/Mod Version: [0-9]\+\.[0-9]\+\.[0-9]\+/Mod Version: $NEW_VERSION/" "$YAML_FILE"
           fi
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+
       - name: Commit & Push version bump
         run: |
           git config user.name "github-actions[bot]"

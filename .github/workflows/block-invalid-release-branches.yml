@@ -1,20 +1,21 @@
 ﻿name: Block Invalid Release Branches
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
-    branches:
-      - master
+  workflow_call:
+    inputs:
+      head_ref:
+        description: "Name des Head-Branches (github.head_ref)"
+        required: true
+        type: string
 
 jobs:
   block-invalid-release-pr:
     runs-on: ubuntu-latest
-    if: github.event.pull_request.state == 'open'
 
     steps:
       - name: Check branch naming convention
         run: |
-          branch="${{ github.head_ref }}"
+          branch="${{ inputs.head_ref }}"
 
           if [[ ! "$branch" =~ ^R[0-9]{2}($|-|/) ]]; then
             echo "::error title=Invalid branch name::"

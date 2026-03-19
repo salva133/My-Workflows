@@ -1,16 +1,22 @@
 ﻿name: Create Release
 
 on:
-  pull_request:
-    types: [closed]
-    branches:
-      - master
+  workflow_call:
+    inputs:
+      branch_name:
+        required: true
+        type: string
+      pr_number:
+        required: true
+        type: number
+      pr_body:
+        required: false
+        type: string
+        default: ''
 
 jobs:
   create-release:
-    name: Create GitHub Release
     runs-on: ubuntu-latest
-    if: github.event.pull_request.merged == true
 
     steps:
       - name: Checkout code
@@ -18,26 +24,17 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Get branch name from merged PR
-        id: get-branch
-        run: |
-          BRANCH="${{ github.event.pull_request.head.ref }}"
-          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
-          echo "→ Detected branch name: $BRANCH"
-
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: "${{ steps.get-branch.outputs.branch }}"
-          name: ${{ steps.get-branch.outputs.branch }}
-
+          tag_name: "${{ inputs.branch_name }}"
+          name: ${{ inputs.branch_name }}
           body: |
-            Automated release from branch **${{ steps.get-branch.outputs.branch }}**
+            Automated release from branch **${{ inputs.branch_name }}**
             
-            Merged into `${{ github.event.pull_request.base.ref }}` via PR #${{ github.event.pull_request.number }}
+            Merged into `master` via PR #${{ inputs.pr_number }}
             
-            ${{ github.event.pull_request.body }}
-
+            ${{ inputs.pr_body }}
           draft: false
           prerelease: false
           generate_release_notes: true
