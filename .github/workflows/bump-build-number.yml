@@ -94,17 +94,17 @@ jobs:
             if $name != "" then .name = $name else . end
           ' "$FILE" > tmp.json && mv tmp.json "$FILE"
           
-          # === Update localization (robust sed + cleanup for broken files) ===
+          # === Update localization (new pipe format - super simple & reliable) ===
           if [[ -n "$LOCALIZATION_FILE" && -f "$LOCALIZATION_FILE" ]]; then
-            echo "→ Updating ${MOD_DESC_KEY} with Mod Version ($NEW_VERSION) and Game Version ($SUPPORTED_GAME_VERSION)"
+            echo "→ Updating ${MOD_DESC_KEY} with new pipe format"
             
-            NEW_DESC="Mod Version: ${NEW_VERSION}\\nGame Version: ${SUPPORTED_GAME_VERSION}"
+            NEW_DESC="Mod Version: ${NEW_VERSION} | Game Version: ${SUPPORTED_GAME_VERSION}"
             echo "DEBUG: Writing desc = \"${NEW_DESC}\""
             
-            # Replace the entire key line (works even if file is currently broken)
+            # Robust replacement (replaces the entire line, works with any previous state)
             sed -i "s|^\\([[:space:]]*\\)${MOD_DESC_KEY}:.*|\\1${MOD_DESC_KEY}: \"${NEW_DESC}\"|" "$LOCALIZATION_FILE"
             
-            # Cleanup any leftover broken line from previous failed runs
+            # Cleanup any leftover broken "Game Version:" lines from old attempts
             sed -i '/^  *Game Version: /d' "$LOCALIZATION_FILE"
             
           else
