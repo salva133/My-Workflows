@@ -58,7 +58,6 @@ jobs:
           PREFIX=""
           MOD_KEY=""
           MOD_DESC_KEY=""
-          UPDATED=false
           
           for YAML_FILE in localization/english/*_mod_l_english.yml; do
             if [[ -f "$YAML_FILE" ]]; then
@@ -95,25 +94,19 @@ jobs:
             if $name != "" then .name = $name else . end
           ' "$FILE" > tmp.json && mv tmp.json "$FILE"
           
-          # === Update localization (awk = reliable \n handling) ===
+          # === Update localization (robust sed + cleanup for broken files) ===
           if [[ -n "$LOCALIZATION_FILE" && -f "$LOCALIZATION_FILE" ]]; then
             echo "→ Updating ${MOD_DESC_KEY} with Mod Version ($NEW_VERSION) and Game Version ($SUPPORTED_GAME_VERSION)"
             
-            # Literal \n (single backslash in the string)
             NEW_DESC="Mod Version: ${NEW_VERSION}\\nGame Version: ${SUPPORTED_GAME_VERSION}"
             echo "DEBUG: Writing desc = \"${NEW_DESC}\""
             
-            # Awk replacement — no escaping nightmares
-            awk -v key="${MOD_DESC_KEY}" -v newdesc="${NEW_DESC}" '
-              /^[[:space:]]*'"${key}"':/ {
-                sub(/"[^"]*"/, "\"" newdesc "\"")
-                print
-                next
-              }
-              { print }
-            ' "$LOCALIZATION_FILE" > tmp.yml && mv tmp.yml "$LOCALIZATION_FILE"
+            # Replace the entire key line (works even if file is currently broken)
+            sed -i "s|^\\([[:space:]]*\\)${MOD_DESC_KEY}:.*|\\1${MOD_DESC_KEY}: \"${NEW_DESC}\"|" "$LOCALIZATION_FILE"
             
-            UPDATED=true
+            # Cleanup any leftover broken line from previous failed runs
+            sed -i '/^  *Game Version: /d' "$LOCALIZATION_FILE"
+            
           else
             echo "ℹ️ No localization/english/*_mod_l_english.yml file found — skipping"
           fi
