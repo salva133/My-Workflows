@@ -30,7 +30,7 @@ jobs:
           echo "commit_count=$count" >> $GITHUB_OUTPUT
           echo "→ Found $count commits in PR #${{ inputs.pr_number }}"
 
-      - name: Bump version + sync name & localization (dynamic keys)
+      - name: Bump version by commit count
         id: bump
         if: steps.commit-count.outputs.commit_count > 0
         run: |
@@ -43,44 +43,11 @@ jobs:
           fi
           
           OLD_VERSION=$(jq -r '.version // "0.0.0"' "$FILE")
-          SUPPORTED_GAME_VERSION=$(jq -r '.supported_game_version // "1.12.5"' "$FILE")
-          
           if [[ ! $OLD_VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "❌ Invalid version format: $OLD_VERSION"
             exit 1
           fi
           
-          echo "Supported game version from metadata: $SUPPORTED_GAME_VERSION"
-          
-          # === Find localization file (first one only) + build dynamic keys ===
-          LOCALIZATION_FILE=""
-          MOD_NAME=$(jq -r '.name // ""' "$FILE")
-          PREFIX=""
-          MOD_KEY=""
-          MOD_DESC_KEY=""
-          
-          for YAML_FILE in localization/english/*_mod_l_english.yml; do
-            if [[ -f "$YAML_FILE" ]]; then
-              LOCALIZATION_FILE="$YAML_FILE"
-              BASENAME=$(basename "$YAML_FILE")
-              PREFIX=${BASENAME%%_*}
-              MOD_KEY="mod${PREFIX}"
-              MOD_DESC_KEY="${MOD_KEY}_desc"
-              
-              echo "→ Detected filename prefix: '${PREFIX}' → using dynamic keys: ${MOD_KEY} and ${MOD_DESC_KEY}"
-              
-              MOD_NAME_EXTRACTED=$(sed -n "s/^[[:space:]]*${MOD_KEY}:[[:space:]]*\"\([^\"]*\)\".*/\1/p" "$YAML_FILE")
-              if [[ -n "$MOD_NAME_EXTRACTED" ]]; then
-                MOD_NAME="$MOD_NAME_EXTRACTED"
-                echo "→ Mod name from localization (${MOD_KEY}): \"$MOD_NAME\""
-              else
-                echo "⚠️ Could not parse ${MOD_KEY} key — keeping current metadata name"
-              fi
-              break
-            fi
-          done
-          
-          # Bump version
           IFS='.' read -r major minor patch <<< "$OLD_VERSION"
           BUMP_BY=${{ steps.commit-count.outputs.commit_count }}
           new_patch=$((patch + BUMP_BY))
@@ -89,30 +56,30 @@ jobs:
           echo "Bump: $OLD_VERSION → $NEW_VERSION (+$BUMP_BY)"
           
           # Update metadata.json
-          jq --arg nv "$NEW_VERSION" --arg name "$MOD_NAME" '
-            .version = $nv |
-            if $name != "" then .name = $name else . end
-          ' "$FILE" > tmp.json && mv tmp.json "$FILE"
+          jq --arg nv "$NEW_VERSION" '.version = $nv' "$FILE" > tmp.json && mv tmp.json "$FILE"
           
-          # === Update localization (new pipe format - super simple & reliable) ===
-          if [[ -n "$LOCALIZATION_FILE" && -f "$LOCALIZATION_FILE" ]]; then
-            echo "→ Updating ${MOD_DESC_KEY} with new pipe format"
-            
-            NEW_DESC="Mod Version: ${NEW_VERSION} | Game Version: ${SUPPORTED_GAME_VERSION}"
-            echo "DEBUG: Writing desc = \"${NEW_DESC}\""
-            
-            # Robust replacement (replaces the entire line, works with any previous state)
-            sed -i "s|^\\([[:space:]]*\\)${MOD_DESC_KEY}:.*|\\1${MOD_DESC_KEY}: \"${NEW_DESC}\"|" "$LOCALIZATION_FILE"
-            
-            # Cleanup any leftover broken "Game Version:" lines from old attempts
-            sed -i '/^  *Game Version: /d' "$LOCALIZATION_FILE"
-            
-          else
+          # === Localization version bump (optional + first file only) ===
+          echo "Checking localization files..."
+          LOCALIZATION_FILE=""
+          UPDATED=false
+          
+          for YAML_FILE in localization/english/*_mod_l_english.yml; do
+            if [[ -f "$YAML_FILE" ]]; then
+              LOCALIZATION_FILE="$YAML_FILE"
+              echo "→ Updating Mod Version in: $YAML_FILE"
+              sed -i "s/Mod Version: [0-9]\+\.[0-9]\+\.[0-9]\+/Mod Version: $NEW_VERSION/" "$YAML_FILE"
+              UPDATED=true
+              break   # ← STOP after the first file (as requested)
+            fi
+          done
+          
+          if [[ "$UPDATED" == false ]]; then
             echo "ℹ️ No localization/english/*_mod_l_english.yml file found — skipping"
+          else
+            echo "✅ Localization file updated: $LOCALIZATION_FILE"
           fi
           
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
-          echo "localization_file=$LOCALIZATION_FILE" >> $GITHUB_OUTPUT
 
       - name: Commit & Push version bump
         run: |
@@ -121,7 +88,7 @@ jobs:
           
           git add .metadata/metadata.json
           
-          LOCALIZATION_FILE="${{ steps.bump.outputs.localization_file }}"
+          # Add only the exact localization file we updated (or nothing)
           if [[ -n "$LOCALIZATION_FILE" && -f "$LOCALIZATION_FILE" ]]; then
             git add "$LOCALIZATION_FILE"
           fi
