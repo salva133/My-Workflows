@@ -96,11 +96,13 @@ jobs:
             if $name != "" then .name = $name else . end
           ' "$FILE" > tmp.json && mv tmp.json "$FILE"
           
-          # Update localization using dynamic DESC_KEY (preserves exact indentation)
           if [[ -n "$LOCALIZATION_FILE" && -f "$LOCALIZATION_FILE" ]]; then
             echo "→ Updating ${MOD_DESC_KEY} with Mod Version ($NEW_VERSION) and Game Version ($SUPPORTED_GAME_VERSION)"
-            NEW_DESC="Mod Version: $NEW_VERSION\nGame Version: $SUPPORTED_GAME_VERSION"
-            sed -i "s/^\([[:space:]]*\)${MOD_DESC_KEY}: \"[^\"]*\"/\1${MOD_DESC_KEY}: \"${NEW_DESC}\"/" "$LOCALIZATION_FILE"
+            
+            NEW_DESC="Mod Version: ${NEW_VERSION}\\nGame Version: ${SUPPORTED_GAME_VERSION}"
+            
+            sed -i "s|^\([[:space:]]*\)${MOD_DESC_KEY}: \".*\"|\1${MOD_DESC_KEY}: \"${NEW_DESC}\"|" "$LOCALIZATION_FILE"
+            
             UPDATED=true
           else
             echo "ℹ️ No localization/english/*_mod_l_english.yml file found — skipping"
