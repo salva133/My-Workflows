@@ -1,0 +1,63 @@
+name: Bump Build Number
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - master
+permissions:
+  contents: write
+  pull-requests: read
+jobs:
+  bump:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          token: ${{ github.token }}
+          fetch-depth: 0
+      - name: Get number of commits in this PR
+        id: commit-count
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          count=$(gh pr view ${{ github.event.pull_request.number }} --json commits --jq '.commits | length')
+          echo "commit_count=$count" >> $GITHUB_OUTPUT
+          echo "→ Found $count commits in PR #${{ github.event.pull_request.number }}"
+      - name: Bump version by commit count
+        id: bump
+        if: steps.commit-count.outputs.commit_count > 0
+        run: |
+          set -euo pipefail
+          FILE=".metadata/metadata.json"
+          if [[ ! -f "$FILE" ]]; then
+            echo "❌ metadata.json nicht gefunden"
+            exit 1
+          fi
+          OLD_VERSION=$(jq -r '.version // "0.0.0"' "$FILE")
+          if [[ ! $OLD_VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "❌ Ungültiges Version-Format: $OLD_VERSION"
+            exit 1
+          fi
+          IFS='.' read -r major minor patch <<< "$OLD_VERSION"
+          BUMP_BY=${{ steps.commit-count.outputs.commit_count }}
+          new_patch=$((patch + BUMP_BY))
+          NEW_VERSION="$major.$minor.$new_patch"
+          echo "Bump: $OLD_VERSION → $NEW_VERSION (+$BUMP_BY)"
+          jq --arg nv "$NEW_VERSION" '.version = $nv' "$FILE" > tmp.json && mv tmp.json "$FILE"
+          YAML_FILE="localization/english/ssm_mod_l_english.yml"
+          if [[ -f "$YAML_FILE" ]]; then
+            sed -i "s/Mod Version: [0-9]\+\.[0-9]\+\.[0-9]\+/Mod Version: $NEW_VERSION/" "$YAML_FILE"
+          fi
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+      - name: Commit & Push version bump
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .metadata/metadata.json localization/english/ssm_mod_l_english.yml
+          if git diff --staged --quiet; then
+            echo "Keine Änderung nötig → Version bleibt gleich"
+            exit 0
+          fi
+          git commit -m "ci: bump patch by ${{ steps.commit-count.outputs.commit_count }} → ${{ steps.bump.outputs.new_version }}"
+          git push

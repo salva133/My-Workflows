@@ -1,0 +1,133 @@
+name: Create steam_desc from README
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'README.md'
+
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-steam-desc:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+
+      - name: Generate steam_desc.txt (Markdown → Steam BBCode)
+        run: |
+          python - << 'EOF'
+          import re
+
+          with open("README.md", encoding="utf-8") as f:
+              md = f.read().strip()
+
+          if not md:
+              print("README.md ist leer - nichts zu tun.")
+              exit(0)
+
+          # Entferne Kommentare
+          md = re.sub(r'<!--.*?-->', '', md, flags=re.DOTALL)
+
+          # Überschriften
+          md = re.sub(r'^# (.*)$', r'[h1]\1[/h1]', md, flags=re.M)
+          md = re.sub(r'^## (.*)$', r'[h2]\1[/h2]', md, flags=re.M)
+          md = re.sub(r'^### (.*)$', r'[h3]\1[/h3]', md, flags=re.M)
+          md = re.sub(r'^#### (.*)$', r'[h3]\1[/h3]', md, flags=re.M)  # Höhere zu h3
+
+          # Fett
+          md = re.sub(r'\*\*(.*?)\*\*', r'[b]\1[/b]', md)
+
+          # Kursiv
+          md = re.sub(r'\*(.*?)\*', r'[i]\1[/i]', md)
+
+          # Listen: - oder * zu [*], und wrap in [list]...[/list]
+          md = re.sub(r'^(\s*)- (.*)$', r'\1[*]\2', md, flags=re.M)
+          md = re.sub(r'^(\s*)\d+\. (.*)$', r'\1[*]\2', md, flags=re.M)  # Geordnete zu ungeordnet
+          lines = md.splitlines()
+          in_list = False
+          new_lines = []
+          for line in lines:
+              if line.strip().startswith('[*]'):
+                  if not in_list:
+                      new_lines.append('[list]')
+                      in_list = True
+                  new_lines.append(line)
+              else:
+                  if in_list:
+                      new_lines.append('[/list]')
+                      in_list = False
+                  new_lines.append(line)
+          if in_list:
+              new_lines.append('[/list]')
+          md = '\n'.join(new_lines)
+
+          # Links
+          md = re.sub(r'\[([^\[]+?)\]\(([^)]+?)\)', r'[url=\2]\1[/url]', md)
+
+          # Bilder → Alt-Text (da [img] oft broken)
+          md = re.sub(r'!\[([^\[]*?)\]\(([^)]*?)\)', r'[i]\1 (Bild)[/i]', md)
+
+          # Code
+          md = re.sub(r'`(.*?)`', r'[code]\1[/code]', md)
+
+          # Blockquotes
+          md = re.sub(r'^> (.*)$', r'[quote]\1[/quote]', md, flags=re.M)
+
+          # Horizontale Linien
+          md = re.sub(r'^-{3,}$', r'[hr]', md, flags=re.M)
+
+          # Leerzeilen reduzieren
+          md = re.sub(r'\n{3,}', '\n\n', md)
+
+          # Lange Zeilen umbrechen (~80 Zeichen, Tags schützen)
+          lines = []
+          for line in md.splitlines():
+              if len(line) > 80 and not re.search(r'\[/?(h[1-3]|url|list)', line):  # Wichtige Tags nicht zerschneiden
+                  while len(line) > 80:
+                      split_pos = line.rfind(' ', 0, 80)
+                      if split_pos == -1:
+                          split_pos = 80
+                      lines.append(line[:split_pos])
+                      line = line[split_pos:].lstrip()
+              lines.append(line)
+          md = '\n'.join(lines).strip()
+
+          with open("steam_desc.txt", "w", encoding="utf-8") as f:
+              f.write(md)
+
+          print("steam_desc.txt erstellt.")
+          # Debugging: Erste Zeilen ins Log
+          print("Vorschau (erste 10 Zeilen):")
+          print('\n'.join(md.splitlines()[:10]))
+          EOF
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "GitHub Actions Bot"
+          git config user.email "actions@github.com"
+
+          git add steam_desc.txt || true
+
+          if git diff --staged --quiet; then
+            echo "Keine Änderungen - nichts zu committen."
+          else
+            git commit -m "ci: update steam_desc.txt from README.md (BBCode)"
+            git pull -r
+            git push
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

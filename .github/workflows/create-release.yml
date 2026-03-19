@@ -1,0 +1,46 @@
+﻿name: Create Release
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - master
+
+jobs:
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.merged == true
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Get branch name from merged PR
+        id: get-branch
+        run: |
+          BRANCH="${{ github.event.pull_request.head.ref }}"
+          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+          echo "→ Detected branch name: $BRANCH"
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "${{ steps.get-branch.outputs.branch }}"
+          name: ${{ steps.get-branch.outputs.branch }}
+
+          body: |
+            Automated release from branch **${{ steps.get-branch.outputs.branch }}**
+            
+            Merged into `${{ github.event.pull_request.base.ref }}` via PR #${{ github.event.pull_request.number }}
+            
+            ${{ github.event.pull_request.body }}
+
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
