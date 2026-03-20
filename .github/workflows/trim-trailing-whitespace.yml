@@ -1,0 +1,25 @@
+name: Trim Trailing Whitespace
+
+on:
+  workflow_call:
+
+permissions:
+  contents: write
+
+jobs:
+  trim:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+
+      - name: Remove trailing whitespace
+        run: |
+          git ls-files -z --cached --others --exclude-standard -- '*.txt' '*.yml' |
+          xargs -0 sed -i 's/[[:space:]]*$//'
+
+      - uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "style: trim trailing whitespace"
+          branch: ${{ github.head_ref || github.ref_name }}
