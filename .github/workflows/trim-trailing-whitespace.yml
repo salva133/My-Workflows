@@ -19,7 +19,7 @@ jobs:
           git ls-files -z --cached --others --exclude-standard -- '*.txt' '*.yml' |
           xargs -0 sed -i 's/[[:space:]]*$//'
 
-      - uses: stefanzweifel/git-auto-commit-action@v5
+      - uses: stefanzweifel/git-auto-commit-action@v7
         with:
           commit_message: "style: trim trailing whitespace"
           branch: ${{ github.head_ref || github.ref_name }}
