@@ -67,12 +67,11 @@ jobs:
             if [[ -f "$YAML_FILE" ]]; then
               LOCALIZATION_FILE="$YAML_FILE"
               echo "→ Updating Mod Version in: $YAML_FILE"
-              sed -i "s/Mod Version: [0-9]\+\.[0-9]\+\.[0-9]\+/Mod Version: $NEW_VERSION/" "$YAML_FILE"
-              UPDATED=true
-              break   # ← STOP after the first file (as requested)
+              sed -i 's/Mod Version: [0-9]\+\.[0-9]\+\.[0-9]\+/Mod Version: '"$NEW_VERSION"'/' "$YAML_FILE"
+              break
             fi
           done
-          
+
           if [[ "$UPDATED" == false ]]; then
             echo "ℹ️ No localization/english/*_mod_l_english.yml file found — skipping"
           else
@@ -88,7 +87,6 @@ jobs:
           
           git add .metadata/metadata.json
           
-          # Add only the exact localization file we updated (or nothing)
           if [[ -n "$LOCALIZATION_FILE" && -f "$LOCALIZATION_FILE" ]]; then
             git add "$LOCALIZATION_FILE"
           fi
