@@ -20,7 +20,7 @@ jobs:
           branch="${{ inputs.head_ref }}"
 
           if [[ ! "$branch" =~ ^R[0-9]{2}($|-|/) ]]; then
-            echo "::error title=Invalid branch name::"
+            echo "::error title=Invalid branch name::Branch '$branch' ist ungültig. Erlaubte Formate: R01…R99"
             echo "Dieser Pull Request darf **nicht** in master gemerged werden!"
             echo ""
             echo "Erlaubte Branches: R01, R02, ..., R99"

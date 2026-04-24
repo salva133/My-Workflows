@@ -61,8 +61,7 @@ jobs:
           # === Localization version bump (optional + first file only) ===
           echo "Checking localization files..."
           LOCALIZATION_FILE=""
-          UPDATED=false
-          
+
           for YAML_FILE in localization/english/*_mod_l_english.yml; do
             if [[ -f "$YAML_FILE" ]]; then
               LOCALIZATION_FILE="$YAML_FILE"
@@ -72,13 +71,14 @@ jobs:
             fi
           done
 
-          if [[ "$UPDATED" == false ]]; then
+          if [[ -z "$LOCALIZATION_FILE" ]]; then
             echo "ℹ️ No localization/english/*_mod_l_english.yml file found — skipping"
           else
             echo "✅ Localization file updated: $LOCALIZATION_FILE"
           fi
-          
+
           echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "LOCALIZATION_FILE=$LOCALIZATION_FILE" >> $GITHUB_ENV
 
       - name: Commit & Push version bump
         run: |

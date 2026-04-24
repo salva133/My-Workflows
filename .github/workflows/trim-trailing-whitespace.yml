@@ -16,7 +16,7 @@ jobs:
 
       - name: Remove trailing whitespace
         run: |
-          git ls-files -z --cached --others --exclude-standard -- '*.txt' '*.yml' |
+          git ls-files -z --cached --exclude-standard -- '*.txt' '*.yml' |
           xargs -0 sed -i 's/[[:space:]]*$//'
 
       - uses: stefanzweifel/git-auto-commit-action@v7
