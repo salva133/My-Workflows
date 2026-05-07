@@ -92,18 +92,7 @@ jobs:
           # Leerzeilen reduzieren
           md = re.sub(r'\n{3,}', '\n\n', md)
 
-          # Lange Zeilen umbrechen (~80 Zeichen, Tags schützen)
-          lines = []
-          for line in md.splitlines():
-              if len(line) > 80 and not re.search(r'\[/?(h[1-3]|url|list)', line):  # Wichtige Tags nicht zerschneiden
-                  while len(line) > 80:
-                      split_pos = line.rfind(' ', 0, 80)
-                      if split_pos == -1:
-                          split_pos = 80
-                      lines.append(line[:split_pos])
-                      line = line[split_pos:].lstrip()
-              lines.append(line)
-          md = '\n'.join(lines).strip()
+          md = md.strip()
 
           with open("steam_desc.txt", "w", encoding="utf-8") as f:
               f.write(md)
