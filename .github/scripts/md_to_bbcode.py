@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Konvertiert README.md nach steam_desc.txt (Steam-BBCode).
+"""Convert README.md to steam_desc.txt (Steam BBCode).
 
-Aufruf ohne Argumente; liest README.md im CWD und schreibt steam_desc.txt.
-Reine Standardbibliothek, kein setup-python noetig.
+Called without arguments; reads README.md in the CWD and writes steam_desc.txt.
+Standard library only, no setup-python required.
 """
 import os
 import re
@@ -10,24 +10,24 @@ import sys
 
 
 def convert(md: str) -> str:
-    # Kommentare entfernen
+    # Remove comments
     md = re.sub(r"<!--.*?-->", "", md, flags=re.DOTALL)
 
-    # Ueberschriften
+    # Headings
     md = re.sub(r"^# (.*)$", r"[h1]\1[/h1]", md, flags=re.M)
     md = re.sub(r"^## (.*)$", r"[h2]\1[/h2]", md, flags=re.M)
     md = re.sub(r"^### (.*)$", r"[h3]\1[/h3]", md, flags=re.M)
-    md = re.sub(r"^#### (.*)$", r"[h3]\1[/h3]", md, flags=re.M)  # Hoehere zu h3
+    md = re.sub(r"^#### (.*)$", r"[h3]\1[/h3]", md, flags=re.M)  # Deeper levels to h3
 
-    # Fett (vor kursiv)
+    # Bold (before italic)
     md = re.sub(r"\*\*(.*?)\*\*", r"[b]\1[/b]", md)
 
-    # Kursiv: einzelne Sterne, keine angrenzenden Sterne (robuster gegen **)
+    # Italic: single asterisks, no adjacent asterisks (more robust against **)
     md = re.sub(r"(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)", r"[i]\1[/i]", md)
 
-    # Listen: - oder * zu [*], und in [list]...[/list] wrappen
+    # Lists: - or * to [*], and wrap in [list]...[/list]
     md = re.sub(r"^(\s*)- (.*)$", r"\1[*]\2", md, flags=re.M)
-    md = re.sub(r"^(\s*)\d+\. (.*)$", r"\1[*]\2", md, flags=re.M)  # Geordnete zu ungeordnet
+    md = re.sub(r"^(\s*)\d+\. (.*)$", r"\1[*]\2", md, flags=re.M)  # Ordered to unordered
     lines = md.splitlines()
     in_list = False
     new_lines = []
@@ -46,8 +46,8 @@ def convert(md: str) -> str:
         new_lines.append("[/list]")
     md = "\n".join(new_lines)
 
-    # Bilder -> Alt-Text (da [img] oft broken)
-    md = re.sub(r"!\[([^\[]*?)\]\(([^)]*?)\)", r"[i]\1 (Bild)[/i]", md)
+    # Images -> alt text (since [img] is often broken)
+    md = re.sub(r"!\[([^\[]*?)\]\(([^)]*?)\)", r"[i]\1 (image)[/i]", md)
 
     # Links
     md = re.sub(r"\[([^\[]+?)\]\(([^)]+?)\)", r"[url=\2]\1[/url]", md)
@@ -58,10 +58,10 @@ def convert(md: str) -> str:
     # Blockquotes
     md = re.sub(r"^> (.*)$", r"[quote]\1[/quote]", md, flags=re.M)
 
-    # Horizontale Linien
+    # Horizontal rules
     md = re.sub(r"^-{3,}$", r"[hr]", md, flags=re.M)
 
-    # Leerzeilen reduzieren
+    # Collapse blank lines
     md = re.sub(r"\n{3,}", "\n\n", md)
 
     return md.strip()
@@ -76,7 +76,7 @@ def main() -> int:
         md = f.read().strip()
 
     if not md:
-        print("README.md ist leer - nichts zu tun.")
+        print("README.md is empty - nothing to do.")
         return 0
 
     result = convert(md)
@@ -84,7 +84,7 @@ def main() -> int:
     with open("steam_desc.txt", "w", encoding="utf-8") as f:
         f.write(result)
 
-    print("steam_desc.txt erstellt.")
+    print("steam_desc.txt created.")
     return 0
 
 

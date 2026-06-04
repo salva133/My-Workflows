@@ -34,7 +34,7 @@ jobs:
           git add steam_desc.txt
 
           if git diff --staged --quiet; then
-            echo "Keine Änderungen - nichts zu committen."
+            echo "No changes - nothing to commit."
           else
             git commit -m "ci: update steam_desc.txt from README.md (BBCode)"
             git push
