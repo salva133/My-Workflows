@@ -12,12 +12,18 @@ permissions:
   contents: write
   pull-requests: read
 
+concurrency:
+  group: bump-build-number-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: false
+
 jobs:
   bump:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
         with:
+          ref: ${{ github.head_ref }}
           token: ${{ github.token }}
           fetch-depth: 0
 
@@ -84,7 +90,9 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          
+
+          git pull -r --autostash
+
           git add .metadata/metadata.json
           
           if [[ -n "$LOCALIZATION_FILE" && -f "$LOCALIZATION_FILE" ]]; then
