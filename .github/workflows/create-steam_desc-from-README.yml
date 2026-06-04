@@ -6,9 +6,14 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: steam-desc-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: false
+
 jobs:
   update-steam-desc:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Checkout repository
@@ -16,89 +21,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.11'
-
       - name: Generate steam_desc.txt (Markdown → Steam BBCode)
-        run: |
-          python - << 'EOF'
-          import re
-          import os
-
-          if not os.path.exists("README.md"):
-              print("README.md not found — nothing to do.")
-              exit(0)
-
-          with open("README.md", encoding="utf-8") as f:
-              md = f.read().strip()
-
-          if not md:
-              print("README.md ist leer - nichts zu tun.")
-              exit(0)
-
-          # Entferne Kommentare
-          md = re.sub(r'<!--.*?-->', '', md, flags=re.DOTALL)
-
-          # Überschriften
-          md = re.sub(r'^# (.*)$', r'[h1]\1[/h1]', md, flags=re.M)
-          md = re.sub(r'^## (.*)$', r'[h2]\1[/h2]', md, flags=re.M)
-          md = re.sub(r'^### (.*)$', r'[h3]\1[/h3]', md, flags=re.M)
-          md = re.sub(r'^#### (.*)$', r'[h3]\1[/h3]', md, flags=re.M)  # Höhere zu h3
-
-          # Fett
-          md = re.sub(r'\*\*(.*?)\*\*', r'[b]\1[/b]', md)
-
-          # Kursiv
-          md = re.sub(r'\*(.*?)\*', r'[i]\1[/i]', md)
-
-          # Listen: - oder * zu [*], und wrap in [list]...[/list]
-          md = re.sub(r'^(\s*)- (.*)$', r'\1[*]\2', md, flags=re.M)
-          md = re.sub(r'^(\s*)\d+\. (.*)$', r'\1[*]\2', md, flags=re.M)  # Geordnete zu ungeordnet
-          lines = md.splitlines()
-          in_list = False
-          new_lines = []
-          for line in lines:
-              if line.strip().startswith('[*]'):
-                  if not in_list:
-                      new_lines.append('[list]')
-                      in_list = True
-                  new_lines.append(line)
-              else:
-                  if in_list:
-                      new_lines.append('[/list]')
-                      in_list = False
-                  new_lines.append(line)
-          if in_list:
-              new_lines.append('[/list]')
-          md = '\n'.join(new_lines)
-
-          # Bilder → Alt-Text (da [img] oft broken)
-          md = re.sub(r'!\[([^\[]*?)\]\(([^)]*?)\)', r'[i]\1 (Bild)[/i]', md)
-
-          # Links
-          md = re.sub(r'\[([^\[]+?)\]\(([^)]+?)\)', r'[url=\2]\1[/url]', md)
-
-          # Code
-          md = re.sub(r'`(.*?)`', r'[code]\1[/code]', md)
-
-          # Blockquotes
-          md = re.sub(r'^> (.*)$', r'[quote]\1[/quote]', md, flags=re.M)
-
-          # Horizontale Linien
-          md = re.sub(r'^-{3,}$', r'[hr]', md, flags=re.M)
-
-          # Leerzeilen reduzieren
-          md = re.sub(r'\n{3,}', '\n\n', md)
-
-          md = md.strip()
-
-          with open("steam_desc.txt", "w", encoding="utf-8") as f:
-              f.write(md)
-
-          print("steam_desc.txt erstellt.")
-          EOF
+        run: python3 .github/scripts/md_to_bbcode.py
 
       - name: Commit and push if changed
         run: |
