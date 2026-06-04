@@ -4,11 +4,11 @@ on:
   workflow_call:
     inputs:
       head_ref:
-        description: "Name des Head-Branches (github.head_ref)"
+        description: "Name of the head branch (github.head_ref)"
         required: true
         type: string
       draft:
-        description: "Ob der PR ein Draft ist (github.event.pull_request.draft)"
+        description: "Whether the PR is a draft (github.event.pull_request.draft)"
         required: false
         type: boolean
         default: false
@@ -29,12 +29,12 @@ jobs:
           branch="${{ inputs.head_ref }}"
 
           if [[ ! "$branch" =~ ^R(0[1-9]|[1-9][0-9])($|-|/) ]]; then
-            echo "::error title=Invalid branch name::Branch '$branch' ist ungültig. Erlaubte Formate: R01…R99"
-            echo "Dieser Pull Request darf **nicht** in master gemerged werden!"
+            echo "::error title=Invalid branch name::Branch '$branch' is invalid. Allowed formats: R01...R99"
+            echo "This pull request must **not** be merged into master!"
             echo ""
-            echo "Erlaubte Branches: R01, R02, ..., R99"
-            echo "Aktueller Branch: $branch"
+            echo "Allowed branches: R01, R02, ..., R99"
+            echo "Current branch: $branch"
             exit 1
           fi
 
-          echo "Branch-Name OK: $branch"
+          echo "Branch name OK: $branch"
