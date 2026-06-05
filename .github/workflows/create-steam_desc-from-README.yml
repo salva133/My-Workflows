@@ -16,13 +16,22 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - name: Checkout repository
+      - name: Checkout target repository
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
+      - name: Checkout workflow scripts (My-Workflows)
+        uses: actions/checkout@v6
+        with:
+          repository: salva133/My-Workflows
+          ref: latest
+          path: .workflow-scripts
+          fetch-depth: 1
+          persist-credentials: false
+
       - name: Generate steam_desc.txt (Markdown → Steam BBCode)
-        run: python3 .github/scripts/md_to_bbcode.py
+        run: python3 .workflow-scripts/.github/scripts/md_to_bbcode.py
 
       - name: Commit and push if changed
         run: |
