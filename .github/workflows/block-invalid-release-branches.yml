@@ -1,4 +1,4 @@
-﻿name: Block Invalid Release Branches
+name: PR Merge Checks
 
 on:
   workflow_call:
@@ -17,6 +17,20 @@ permissions:
   contents: read
 
 jobs:
+  block-draft-pr:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Check draft status
+        run: |
+          if [[ "${{ inputs.draft }}" == "true" ]]; then
+            echo "::error title=Draft pull request::This pull request is still a draft and must not be merged. Mark it as ready for review first."
+            exit 1
+          fi
+
+          echo "PR is ready for review, merge is allowed."
+
   block-invalid-release-pr:
     if: inputs.draft == false
 
