@@ -34,7 +34,10 @@ jobs:
         run: python3 .workflow-scripts/.github/scripts/md_to_bbcode.py
 
       - name: Commit and push if changed
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
@@ -48,5 +51,3 @@ jobs:
             git commit -m "ci: update steam_desc.txt from README.md (BBCode)"
             git push
           fi
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

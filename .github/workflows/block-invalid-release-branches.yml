@@ -27,8 +27,11 @@ jobs:
 
     steps:
       - name: Check draft status
+        env:
+          DRAFT: ${{ inputs.draft }}
         run: |
-          if [[ "${{ inputs.draft }}" == "true" ]]; then
+          set -euo pipefail
+          if [[ "$DRAFT" == "true" ]]; then
             echo "::error title=Draft pull request::This pull request is still a draft and must not be merged. Mark it as ready for review first."
             exit 1
           fi
@@ -43,16 +46,17 @@ jobs:
 
     steps:
       - name: Check branch naming convention
+        env:
+          BRANCH: ${{ inputs.head_ref }}
         run: |
-          branch="${{ inputs.head_ref }}"
-
-          if [[ ! "$branch" =~ ^R(0[1-9]|[1-9][0-9])($|-|/) ]]; then
-            echo "::error title=Invalid branch name::Branch '$branch' is invalid. Allowed formats: R01...R99"
+          set -euo pipefail
+          if [[ ! "$BRANCH" =~ ^R(0[1-9]|[1-9][0-9])($|-|/) ]]; then
+            echo "::error title=Invalid branch name::Branch '$BRANCH' is invalid. Allowed formats: R01...R99"
             echo "This pull request must **not** be merged into master!"
             echo ""
             echo "Allowed branches: R01, R02, ..., R99"
-            echo "Current branch: $branch"
+            echo "Current branch: $BRANCH"
             exit 1
           fi
 
-          echo "Branch name OK: $branch"
+          echo "Branch name OK: $BRANCH"

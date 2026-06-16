@@ -17,6 +17,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: create-release-${{ inputs.branch_name }}
+  cancel-in-progress: false
+
 jobs:
   create-release:
     runs-on: ubuntu-latest
@@ -24,15 +28,17 @@ jobs:
     steps:
       - name: Validate branch naming convention
         id: validate
+        env:
+          BRANCH: ${{ inputs.branch_name }}
         run: |
-          branch="${{ inputs.branch_name }}"
-          if [[ "$branch" =~ ^R(0[1-9]|[1-9][0-9])($|-|/) ]]; then
-            echo "should_create=true" >> $GITHUB_OUTPUT
-            echo "Branch name matches the convention: $branch"
+          set -euo pipefail
+          if [[ "$BRANCH" =~ ^R(0[1-9]|[1-9][0-9])($|-|/) ]]; then
+            echo "should_create=true" >> "$GITHUB_OUTPUT"
+            echo "Branch name matches the convention: $BRANCH"
           else
-            echo "should_create=false" >> $GITHUB_OUTPUT
+            echo "should_create=false" >> "$GITHUB_OUTPUT"
             echo "::notice title=Release Creation Skipped::"
-            echo "Branch '$branch' does **not** match the naming convention."
+            echo "Branch '$BRANCH' does **not** match the naming convention."
             echo "Allowed formats: R01, R02, R03..., R99, R01-feature, R99/hotfix etc."
             echo "Release will **not** be created."
           fi
@@ -47,7 +53,7 @@ jobs:
         if: steps.validate.outputs.should_create == 'true'
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ github.token }}
           tag_name: "${{ inputs.branch_name }}"
           name: ${{ inputs.branch_name }}
           body: |
