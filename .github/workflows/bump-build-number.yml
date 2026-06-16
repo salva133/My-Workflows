@@ -34,10 +34,12 @@ jobs:
         id: commit-count
         env:
           GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ inputs.pr_number }}
         run: |
-          count=$(gh pr view ${{ inputs.pr_number }} --json commits --jq '.commits | length')
-          echo "commit_count=$count" >> $GITHUB_OUTPUT
-          echo "→ Found $count commits in PR #${{ inputs.pr_number }}"
+          set -euo pipefail
+          count=$(gh pr view "$PR_NUMBER" --json commits --jq '.commits | length')
+          echo "commit_count=$count" >> "$GITHUB_OUTPUT"
+          echo "→ Found $count commits in PR #$PR_NUMBER"
 
       - name: Bump version by commit count
         id: bump
@@ -90,22 +92,28 @@ jobs:
           echo "LOCALIZATION_FILE=$LOCALIZATION_FILE" >> $GITHUB_ENV
 
       - name: Commit & Push version bump
+        env:
+          COMMIT_COUNT: ${{ steps.commit-count.outputs.commit_count }}
+          NEW_VERSION: ${{ steps.bump.outputs.new_version }}
         run: |
+          set -euo pipefail
+          LOCALIZATION_FILE="${LOCALIZATION_FILE:-}"
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git pull -r --autostash
 
           git add .metadata/metadata.json
-          
+
           if [[ -n "$LOCALIZATION_FILE" && -f "$LOCALIZATION_FILE" ]]; then
             git add "$LOCALIZATION_FILE"
           fi
-          
+
           if git diff --staged --quiet; then
             echo "No changes needed → Version remains the same"
             exit 0
           fi
-          
-          git commit -m "ci: bump patch by ${{ steps.commit-count.outputs.commit_count }} → ${{ steps.bump.outputs.new_version }}"
+
+          git commit -m "ci: bump patch by ${COMMIT_COUNT} → ${NEW_VERSION}"
           git push
