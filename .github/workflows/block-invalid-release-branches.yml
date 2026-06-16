@@ -7,6 +7,10 @@ on:
         description: "Name of the head branch (github.head_ref)"
         required: true
         type: string
+      base_ref:
+        description: "Name of the base branch the PR targets (github.base_ref)"
+        required: true
+        type: string
       draft:
         description: "Whether the PR is a draft (github.event.pull_request.draft)"
         required: false
@@ -32,7 +36,7 @@ jobs:
           echo "PR is ready for review, merge is allowed."
 
   block-invalid-release-pr:
-    if: inputs.draft == false
+    if: inputs.draft == false && inputs.base_ref == 'master'
 
     runs-on: ubuntu-latest
     timeout-minutes: 5
