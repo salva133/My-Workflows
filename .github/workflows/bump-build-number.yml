@@ -23,10 +23,10 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          # Check out the PR's base branch (e.g. master), not the head branch:
+          # Check out the master branch (the PR's base), not the head branch:
           # this runs on pull_request: closed, by which point the head branch
           # is typically already deleted, so head_ref would fail to check out.
-          ref: ${{ github.event.pull_request.base.ref }}
+          ref: master
           token: ${{ github.token }}
           fetch-depth: 0
 
