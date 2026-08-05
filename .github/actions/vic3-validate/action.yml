@@ -1,0 +1,36 @@
+name: 'Validate Vic3 Mod'
+description: 'Runs the localization sweeps and the vanilla key collision checks over a Victoria 3 mod.'
+
+inputs:
+  vanilla-path:
+    description: 'Path to a vanilla checkout. The vanilla-dependent checks are skipped when it is empty or absent.'
+    required: false
+    default: ''
+  config:
+    description: 'Path to the mod-side validator config, relative to the repository root.'
+    required: false
+    default: '.github/vic3-validate.json'
+
+runs:
+  using: composite
+  steps:
+    - name: Run the validators
+      shell: bash
+      run: |
+        set -uo pipefail
+
+        STATUS=0
+
+        python3 "$GITHUB_ACTION_PATH/check_localization.py" \
+          --mod . \
+          --vanilla "${{ inputs.vanilla-path }}" \
+          --config "${{ inputs.config }}" || STATUS=1
+
+        echo
+
+        python3 "$GITHUB_ACTION_PATH/check_vanilla_keys.py" \
+          --mod . \
+          --vanilla "${{ inputs.vanilla-path }}" \
+          --config "${{ inputs.config }}" || STATUS=1
+
+        exit $STATUS

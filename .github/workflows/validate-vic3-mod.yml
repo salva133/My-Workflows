@@ -1,0 +1,67 @@
+name: Validate Vic3 Mod
+
+on:
+  workflow_call:
+    inputs:
+      vanilla_repo:
+        description: 'Repository holding the vanilla script tree the mod is checked against.'
+        type: string
+        required: false
+        default: 'salva133/Vic3-vanilla'
+      vanilla_ref:
+        description: 'Ref of the vanilla repository. Empty takes its default branch.'
+        type: string
+        required: false
+        default: ''
+      config:
+        description: 'Path to the mod-side validator config.'
+        type: string
+        required: false
+        default: '.github/vic3-validate.json'
+    secrets:
+      vanilla_repo_token:
+        description: 'Token with read access to the vanilla repository. Without it the vanilla-dependent checks are skipped.'
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-vic3-mod-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+
+      # The secrets context cannot be read from a step-level `if`, so the
+      # presence of the token is carried out as a step output.
+      - name: Look for the vanilla token
+        id: token
+        env:
+          VANILLA_TOKEN: ${{ secrets.vanilla_repo_token }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${VANILLA_TOKEN:-}" ]]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "ℹ️ No vanilla_repo_token secret, so the vanilla-dependent checks are skipped."
+          fi
+
+      - name: Check out the vanilla reference
+        if: steps.token.outputs.available == 'true'
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ inputs.vanilla_repo }}
+          ref: ${{ inputs.vanilla_ref }}
+          token: ${{ secrets.vanilla_repo_token }}
+          path: .vic3-vanilla
+
+      - uses: salva133/My-Workflows/.github/actions/vic3-validate@latest
+        with:
+          vanilla-path: ${{ steps.token.outputs.available == 'true' && '.vic3-vanilla' || '' }}
+          config: ${{ inputs.config }}
