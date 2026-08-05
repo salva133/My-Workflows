@@ -61,7 +61,7 @@ jobs:
           token: ${{ secrets.vanilla_repo_token }}
           path: .vic3-vanilla
 
-      - uses: salva133/My-Workflows/.github/actions/vic3-validate@latest
+      - uses: salva133/My-Workflows/.github/actions/vic3-validate@claude/github-workflows-mods-rsb88a
         with:
           vanilla-path: ${{ steps.token.outputs.available == 'true' && '.vic3-vanilla' || '' }}
           config: ${{ inputs.config }}
