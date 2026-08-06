@@ -8,7 +8,9 @@ Each check is opt-in, since the two mods this runs against hold different rules.
                   mod's prefix, so its footprint is not greppable
   ADDED_COMMENT   a comment added by the change under review, where the mod's
                   rule is that script carries none. Only added lines are read,
-                  because the same rule leaves every comment already there alone
+                  because the same rule leaves every comment already there alone,
+                  and a vendored vanilla file is skipped, because the comments
+                  arriving with it are vanilla's rather than the mod's
 """
 
 import argparse
@@ -111,9 +113,23 @@ def added_lines(mod_root, base):
             number += 1
 
 
-def check_added_comments(mod_root, base, report):
+def is_carried_copy(rel, vanilla_root, config):
+    """A vendored vanilla file, whose comments are vanilla's rather than the mod's.
+
+    The two ways a mod names such a copy are the two ways it can be traced back:
+    a copy at vanilla's own path is found by that path, and a renamed monolith
+    gathering vanilla files that sit elsewhere is found by being declared.
+    """
+    if rel in config.get("vendored_monoliths", {}):
+        return True
+    return bool(vanilla_root) and os.path.isfile(os.path.join(vanilla_root, rel))
+
+
+def check_added_comments(mod_root, vanilla_root, config, base, report):
     for rel, number, text in added_lines(mod_root, base):
         if rel.startswith(".github/"):
+            continue
+        if is_carried_copy(rel, vanilla_root, config):
             continue
         bare = QUOTED.sub("", text)
         if "#" in bare:
@@ -150,7 +166,7 @@ def main():
 
     if config.get("forbid_added_comments"):
         if args.diff_base:
-            check_added_comments(args.mod, args.diff_base, report)
+            check_added_comments(args.mod, vanilla, config, args.diff_base, report)
         else:
             print("::notice::No base to diff against, so the comment check is skipped.")
 
