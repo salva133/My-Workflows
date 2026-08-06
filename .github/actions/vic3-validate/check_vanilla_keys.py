@@ -9,6 +9,8 @@ block were not there, so the block is checked here instead.
   SCRIPT_NAME_TAKEN  a scripted effect or trigger carries a vanilla name, where
                      an entry mode does not help and only a rename does
   ENTRY_MODE_TARGET  a bare REPLACE:/INJECT: names a key vanilla does not carry
+  ENTRY_MODE_ORDER   an entry mode sits in a file the game reads before the
+                     vanilla file declaring the key, so it answers nothing
 
 Files the mod ships at vanilla's own path shadow the whole file and are skipped,
 and so is everything under replace_paths and the folders the engine merges.
@@ -31,6 +33,26 @@ def vanilla_file_paths(vanilla_root):
 
 def in_folders(rel_path, folders):
     return any(rel_path.startswith(folder + "/") for folder in folders)
+
+
+def sorts_after_vanilla(rel_path, vanilla_entries):
+    """The game merges a folder's mod and vanilla files and reads them by name.
+
+    An entry mode only reaches a key vanilla has already declared, so the mod's
+    file has to sort after the vanilla file declaring it. Only files in the same
+    folder are read together, so a declaration elsewhere does not constrain this.
+    """
+    folder = os.path.dirname(rel_path)
+    name = os.path.basename(rel_path).lower()
+    blocking = [
+        os.path.basename(vanilla_rel)
+        for vanilla_rel, _, _ in vanilla_entries
+        if os.path.dirname(vanilla_rel) == folder
+        and os.path.basename(vanilla_rel).lower() >= name
+    ]
+    if not blocking:
+        return True, None
+    return False, ", ".join(sorted(blocking))
 
 
 def main():
@@ -66,13 +88,26 @@ def main():
                 continue
 
             if prefix:
-                if prefix in ("REPLACE:", "INJECT:") and key not in vanilla_keys:
-                    report.warn(
-                        "ENTRY_MODE_TARGET",
-                        f"{prefix}{key} names a key vanilla does not declare. "
-                        "The bare form errors when there is nothing to answer; "
-                        "take the TRY_ form where the key may be absent or comes "
-                        "from a dependency.",
+                if key not in vanilla_keys:
+                    if prefix in ("REPLACE:", "INJECT:"):
+                        report.warn(
+                            "ENTRY_MODE_TARGET",
+                            f"{prefix}{key} names a key vanilla does not declare. "
+                            "The bare form errors when there is nothing to answer; "
+                            "take the TRY_ form where the key may be absent or comes "
+                            "from a dependency.",
+                            rel, line,
+                        )
+                    continue
+
+                late_enough, blocking = sorts_after_vanilla(rel, vanilla_keys[key])
+                if not late_enough:
+                    report.error(
+                        "ENTRY_MODE_ORDER",
+                        f"{prefix}{key} sits in a file that sorts ahead of {blocking}, "
+                        "where vanilla declares the key. Entry modes resolve in load "
+                        "order, so this one answers a key nothing has declared yet. "
+                        "Rename the file so it sorts after vanilla's.",
                         rel, line,
                     )
                 continue
