@@ -1,7 +1,11 @@
 name: 'Validate Vic3 Mod'
-description: 'Runs the localization sweeps and the vanilla key collision checks over a Victoria 3 mod.'
+description: 'Runs the localization, vanilla key, encoding, convention and asset checks over a Victoria 3 mod, or the vanilla drift check on its vendored copies.'
 
 inputs:
+  mode:
+    description: 'validate runs the five checks a change is held to. drift compares the vendored copies against vanilla.'
+    required: false
+    default: 'validate'
   vanilla-path:
     description: 'Path to a vanilla checkout. The vanilla-dependent checks are skipped when it is empty or absent.'
     required: false
@@ -10,27 +14,59 @@ inputs:
     description: 'Path to the mod-side validator config, relative to the repository root.'
     required: false
     default: '.github/vic3-validate.json'
+  diff-base:
+    description: 'Ref the change is measured against. Only the checks that read a diff use it, and they are skipped when it is empty.'
+    required: false
+    default: ''
+  write-baseline:
+    description: 'In drift mode, record the current vanilla state as the new baseline instead of reporting drift.'
+    required: false
+    default: 'false'
 
 runs:
   using: composite
   steps:
     - name: Run the validators
+      if: ${{ inputs.mode == 'validate' }}
       shell: bash
       run: |
         set -uo pipefail
 
         STATUS=0
+        VANILLA='${{ inputs.vanilla-path }}'
+        CONFIG='${{ inputs.config }}'
 
         python3 "$GITHUB_ACTION_PATH/check_localization.py" \
-          --mod . \
-          --vanilla "${{ inputs.vanilla-path }}" \
-          --config "${{ inputs.config }}" || STATUS=1
-
+          --mod . --vanilla "$VANILLA" --config "$CONFIG" || STATUS=1
         echo
 
         python3 "$GITHUB_ACTION_PATH/check_vanilla_keys.py" \
-          --mod . \
-          --vanilla "${{ inputs.vanilla-path }}" \
-          --config "${{ inputs.config }}" || STATUS=1
+          --mod . --vanilla "$VANILLA" --config "$CONFIG" || STATUS=1
+        echo
+
+        python3 "$GITHUB_ACTION_PATH/check_encoding.py" \
+          --mod . --config "$CONFIG" || STATUS=1
+        echo
+
+        python3 "$GITHUB_ACTION_PATH/check_conventions.py" \
+          --mod . --vanilla "$VANILLA" --config "$CONFIG" \
+          --diff-base '${{ inputs.diff-base }}' || STATUS=1
+        echo
+
+        python3 "$GITHUB_ACTION_PATH/check_assets.py" \
+          --mod . --config "$CONFIG" || STATUS=1
 
         exit $STATUS
+
+    - name: Run the drift check
+      if: ${{ inputs.mode == 'drift' }}
+      shell: bash
+      run: |
+        set -uo pipefail
+
+        ARGS=(--mod . --vanilla '${{ inputs.vanilla-path }}' --config '${{ inputs.config }}')
+        if [[ '${{ inputs.write-baseline }}' == 'true' ]]; then
+          ARGS+=(--write-baseline)
+        fi
+
+        python3 "$GITHUB_ACTION_PATH/check_vanilla_drift.py" "${ARGS[@]}"

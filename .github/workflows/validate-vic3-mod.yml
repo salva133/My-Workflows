@@ -35,7 +35,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
+      # Full history, because the comment check reads the diff against the base
+      # branch and needs the merge base to be present.
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       # The secrets context cannot be read from a step-level `if`, so the
       # presence of the token is carried out as a step output.
@@ -65,3 +69,4 @@ jobs:
         with:
           vanilla-path: ${{ steps.token.outputs.available == 'true' && '.vic3-vanilla' || '' }}
           config: ${{ inputs.config }}
+          diff-base: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.event.pull_request.base.ref) || '' }}
