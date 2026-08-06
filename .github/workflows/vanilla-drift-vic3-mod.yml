@@ -1,0 +1,99 @@
+name: Vanilla Drift
+
+on:
+  workflow_call:
+    inputs:
+      vanilla_repo:
+        description: 'Repository holding the vanilla script tree the copies are measured against.'
+        type: string
+        required: false
+        default: 'salva133/Vic3-vanilla'
+      vanilla_ref:
+        description: 'Ref of the vanilla repository. Empty takes its default branch.'
+        type: string
+        required: false
+        default: ''
+      config:
+        description: 'Path to the mod-side validator config.'
+        type: string
+        required: false
+        default: '.github/vic3-validate.json'
+      write_baseline:
+        description: 'Record the current vanilla state as the new baseline and commit it, instead of reporting drift.'
+        type: boolean
+        required: false
+        default: false
+    secrets:
+      vanilla_repo_token:
+        description: 'Token with read access to the vanilla repository. The check cannot run without it.'
+        required: true
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: vanilla-drift-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Check out the vanilla reference
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ inputs.vanilla_repo }}
+          ref: ${{ inputs.vanilla_ref }}
+          token: ${{ secrets.vanilla_repo_token }}
+          path: .vic3-vanilla
+
+      - uses: salva133/My-Workflows/.github/actions/vic3-validate@latest
+        id: drift
+        with:
+          mode: drift
+          vanilla-path: .vic3-vanilla
+          config: ${{ inputs.config }}
+          write-baseline: ${{ inputs.write_baseline }}
+
+      - name: Record the new baseline
+        if: ${{ inputs.write_baseline }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/vanilla-baseline.json
+          if git diff --staged --quiet; then
+            echo "✅ Baseline already current."
+          else
+            git commit -m "ci: record the vanilla baseline for the vendored copies"
+            git push
+          fi
+
+      # An issue rather than a failed run, because the drift is news about
+      # vanilla rather than a fault in the change that happens to be building.
+      - name: Open or update the drift issue
+        if: ${{ failure() && steps.drift.outcome == 'failure' && !inputs.write_baseline }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TITLE: 'Vanilla has moved under the vendored copies'
+        run: |
+          set -euo pipefail
+
+          BODY=$(printf '%s\n' \
+            "A scheduled check found that vanilla files this mod has forked have changed since the baseline was recorded." \
+            "" \
+            "The run lists which ones: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            "" \
+            "Re-sync the copies that matter, then run this workflow again with **write_baseline** set so the new state is recorded. Running it with write_baseline without re-syncing silences the check without fixing anything." )
+
+          EXISTING=$(gh issue list --state open --search "$TITLE in:title" --json number --jq '.[0].number // empty')
+          if [[ -n "$EXISTING" ]]; then
+            gh issue comment "$EXISTING" --body "$BODY"
+            echo "Commented on issue #$EXISTING."
+          else
+            gh issue create --title "$TITLE" --body "$BODY"
+          fi
