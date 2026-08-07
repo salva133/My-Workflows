@@ -1,0 +1,155 @@
+name: Release TI Mod
+
+on:
+  workflow_call:
+    inputs:
+      folder_name:
+        description: 'Folder the mod lives in under Mods/Enabled. It is also the folder inside the archive and the name of the archive.'
+        type: string
+        required: true
+      mod_path:
+        description: 'Path to the mod root, the folder holding ModInfo.json.'
+        type: string
+        required: false
+        default: '.'
+      tag_prefix:
+        description: 'Put in front of the ModInfo version to form the tag.'
+        type: string
+        required: false
+        default: 'v'
+      extra_files:
+        description: 'Newline-separated files to put into the archive alongside ModInfo.json and the templates it lists. Missing ones are skipped.'
+        type: string
+        required: false
+        default: |
+          README.md
+          LICENSE
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-ti-mod-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      # The version in ModInfo.json is what the game shows, so it is also what
+      # the tag says. Bumping it is the whole act of releasing.
+      - name: Read the mod metadata
+        id: modinfo
+        env:
+          MOD_PATH: ${{ inputs.mod_path }}
+          TAG_PREFIX: ${{ inputs.tag_prefix }}
+        run: |
+          set -euo pipefail
+
+          FILE="$MOD_PATH/ModInfo.json"
+          if [[ ! -f "$FILE" ]]; then
+            echo "::error title=No ModInfo.json::'$FILE' does not exist, so there is nothing to release."
+            exit 1
+          fi
+
+          VERSION=$(jq -r '.Version // empty' "$FILE")
+          if [[ ! $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error title=Invalid version::ModInfo.json carries Version '$VERSION', which does not read X.Y.Z."
+            exit 1
+          fi
+
+          {
+            echo "version=$VERSION"
+            echo "tag=${TAG_PREFIX}${VERSION}"
+            echo "title=$(jq -r '.Title // "Terra Invicta mod"' "$FILE")"
+            echo "game_version=$(jq -r '.GameVersion // "unknown"' "$FILE")"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "→ ModInfo.json version: $VERSION"
+
+      # Re-running on a version that is already out would rewrite a release
+      # people have downloaded, so it stops here instead.
+      - name: Look for an existing release
+        id: existing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.modinfo.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Release skipped::$TAG is already released. Bump Version in ModInfo.json to cut a new one."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Terra Invicta reads a mod as a folder under Mods/Enabled, so the archive
+      # carries that folder rather than its loose contents.
+      - name: Build the archive
+        id: package
+        if: steps.existing.outputs.exists == 'false'
+        env:
+          MOD_PATH: ${{ inputs.mod_path }}
+          FOLDER: ${{ inputs.folder_name }}
+          VERSION: ${{ steps.modinfo.outputs.version }}
+          EXTRA_FILES: ${{ inputs.extra_files }}
+        run: |
+          set -euo pipefail
+
+          STAGE="$RUNNER_TEMP/stage/$FOLDER"
+          mkdir -p "$STAGE"
+          cp "$MOD_PATH/ModInfo.json" "$STAGE/"
+
+          # Only the templates ModInfo.json lists reach the game, so only those
+          # go into the archive. The validator is what holds that list complete.
+          while IFS= read -r entry; do
+            [[ -z "$entry" ]] && continue
+            if [[ ! -f "$MOD_PATH/$entry" ]]; then
+              echo "::error title=Missing template::ModInfo.json lists '$entry', which is not in the repository."
+              exit 1
+            fi
+            cp "$MOD_PATH/$entry" "$STAGE/"
+            echo "  + $entry"
+          done < <(jq -r '.TemplatesToConcatArrays[]? // empty' "$MOD_PATH/ModInfo.json")
+
+          while IFS= read -r entry; do
+            entry="${entry%$'\r'}"
+            [[ -z "$entry" ]] && continue
+            if [[ -f "$MOD_PATH/$entry" ]]; then
+              cp "$MOD_PATH/$entry" "$STAGE/"
+              echo "  + $entry"
+            fi
+          done <<< "$EXTRA_FILES"
+
+          ARCHIVE="$RUNNER_TEMP/${FOLDER}-v${VERSION}.zip"
+          (cd "$RUNNER_TEMP/stage" && zip -r -q "$ARCHIVE" "$FOLDER")
+
+          echo "archive=$ARCHIVE" >> "$GITHUB_OUTPUT"
+          echo "→ $(basename "$ARCHIVE"), $(du -h "$ARCHIVE" | cut -f1)"
+
+      - name: Create the release
+        if: steps.existing.outputs.exists == 'false'
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          token: ${{ github.token }}
+          tag_name: ${{ steps.modinfo.outputs.tag }}
+          name: ${{ steps.modinfo.outputs.title }} ${{ steps.modinfo.outputs.tag }}
+          body: |
+            **${{ steps.modinfo.outputs.title }}** ${{ steps.modinfo.outputs.version }}, built for Terra Invicta ${{ steps.modinfo.outputs.game_version }}.
+
+            Unpack `${{ inputs.folder_name }}` from the archive into
+
+            ```
+            ...\Steam\steamapps\common\Terra Invicta\Mods\Enabled\
+            ```
+
+            then enable **Use Mods** on the start screen and restart the game.
+          files: ${{ steps.package.outputs.archive }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true

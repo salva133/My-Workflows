@@ -1,0 +1,34 @@
+name: Validate TI Mod
+
+on:
+  workflow_call:
+    inputs:
+      config:
+        description: 'Path to the mod-side validator config.'
+        type: string
+        required: false
+        default: '.github/ti-validate.json'
+      mod_path:
+        description: 'Path to the mod root, the folder holding ModInfo.json.'
+        type: string
+        required: false
+        default: '.'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validate-ti-mod-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: salva133/My-Workflows/.github/actions/ti-validate@latest
+        with:
+          mod-path: ${{ inputs.mod_path }}
+          config: ${{ inputs.config }}
