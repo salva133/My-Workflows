@@ -1,19 +1,79 @@
 name: 'Validate Terra Invicta Mod'
 description: 'Runs the metadata, template, localization and cross-reference checks over a Terra Invicta mod.'
 
+# The settings arrive as inputs rather than as a file in the repository on
+# purpose. Terra Invicta's mod manager parses every .json and .jsonc under the
+# mod folder, so a config file living there stops the mod from installing for
+# anyone who copies the repository into Mods/Enabled.
 inputs:
   mod-path:
     description: 'Path to the mod root, the folder holding ModInfo.json.'
     required: false
     default: '.'
-  config:
-    description: 'Path to the mod-side validator config, relative to the mod root.'
+  id-prefixes:
+    description: 'Prefixes the mod''s own dataNames carry, comma or newline separated. Empty falls back to the scenarioPrefix values TIMetaTemplate declares.'
     required: false
-    default: '.github/ti-validate.jsonc'
+    default: ''
+  ignore-reference-fields:
+    description: 'Fields whose values look like identifiers but never point at another record, comma or newline separated.'
+    required: false
+    default: ''
+  reference-language:
+    description: 'The language other translations are held to.'
+    required: false
+    default: 'en'
+  check-missing-fields:
+    description: 'Report a record missing a field every one of its siblings carries.'
+    required: false
+    default: 'true'
+  config:
+    description: 'Path to a config file to use instead of the inputs above. Only for a mod that keeps its settings in the repository; the file has to sit somewhere the game does not scan.'
+    required: false
+    default: ''
 
 runs:
   using: composite
   steps:
+    # Written outside the mod folder, so the validators read settings the game
+    # never sees.
+    - name: Assemble the settings
+      id: settings
+      shell: bash
+      env:
+        ID_PREFIXES: ${{ inputs.id-prefixes }}
+        IGNORE_FIELDS: ${{ inputs.ignore-reference-fields }}
+        REFERENCE_LANGUAGE: ${{ inputs.reference-language }}
+        CHECK_MISSING_FIELDS: ${{ inputs.check-missing-fields }}
+        EXPLICIT_CONFIG: ${{ inputs.config }}
+      run: |
+        set -euo pipefail
+
+        if [[ -n "$EXPLICIT_CONFIG" ]]; then
+          echo "path=$EXPLICIT_CONFIG" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+
+        CONFIG="$RUNNER_TEMP/ti-validate.json"
+        python3 - "$CONFIG" <<'PY'
+        import json, os, sys
+
+        def items(value):
+            return [part.strip() for part in value.replace(",", "\n").splitlines()
+                    if part.strip()]
+
+        config = {
+            "id_prefixes": items(os.environ["ID_PREFIXES"]),
+            "ignore_reference_fields": items(os.environ["IGNORE_FIELDS"]),
+            "reference_language": os.environ["REFERENCE_LANGUAGE"] or "en",
+            "check_missing_fields": os.environ["CHECK_MISSING_FIELDS"] == "true",
+        }
+        with open(sys.argv[1], "w", encoding="utf-8") as fh:
+            json.dump(config, fh, indent=2)
+        print(json.dumps(config, indent=2))
+        PY
+
+        echo "path=$CONFIG" >> "$GITHUB_OUTPUT"
+
     - name: Run the validators
       shell: bash
       working-directory: ${{ inputs.mod-path }}
@@ -21,7 +81,7 @@ runs:
         set -uo pipefail
 
         STATUS=0
-        CONFIG='${{ inputs.config }}'
+        CONFIG='${{ steps.settings.outputs.path }}'
 
         python3 "$GITHUB_ACTION_PATH/check_modinfo.py" --mod . --config "$CONFIG" || STATUS=1
         echo

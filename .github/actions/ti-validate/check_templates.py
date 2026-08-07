@@ -12,12 +12,23 @@ sharing one are a single record with the later one winning.
   RECORD_DUPLICATE    a dataName is defined twice in the same template
   RECORD_PREFIX       a dataName carries none of the mod's prefixes
   RECORD_FIELD        a record is missing a field every one of its siblings has
+  JSON_STRAY          a .json the mod manager parses but no template array
+
+JSON_STRAY is the one that bites hardest. The mod manager walks the whole mod
+folder, hands every .json and .jsonc it finds to its reader, and expects an
+array of records back. One that holds an object instead — a tool's config, a
+schema, anything — stops the load with "MOD MANAGER FAILED TO LOAD JSON" and
+the mod does not install at all. Renaming it .jsonc does not help; that is
+scanned too.
 """
 
 import argparse
+import json
+import os
 import sys
 
-from tilib import (Report, id_prefixes, load_config, load_templates)
+from tilib import (MODINFO, TEMPLATE_JSON, Report, id_prefixes, load_config,
+                   load_templates, read_text, walk_scanned_json)
 
 # Below this many records, "every sibling has it" says more about the sample
 # size than about the field.
@@ -106,14 +117,61 @@ def check_fields(templates, report):
             )
 
 
+def check_stray_json(mod_root, listed, report):
+    """Holds every .json the mod manager will open to what it can actually read."""
+    for full, rel in walk_scanned_json(mod_root):
+        if rel == MODINFO or TEMPLATE_JSON.match(rel):
+            continue
+
+        try:
+            data = json.loads(read_text(full))
+        except ValueError as exc:
+            report.error(
+                "JSON_STRAY",
+                f"The mod manager parses every .json under the mod folder, and this "
+                f"one does not parse: {exc}. The mod fails to install.",
+                rel, 1,
+            )
+            continue
+
+        if not isinstance(data, list):
+            report.error(
+                "JSON_STRAY",
+                "The mod manager parses every .json under the mod folder and expects "
+                "an array of records. This file holds "
+                f"{'an object' if isinstance(data, dict) else type(data).__name__}, so "
+                "the load stops and the mod does not install. Give the file an "
+                "extension the mod manager does not read, or keep it out of the mod "
+                "folder — .jsonc is scanned as well.",
+                rel, 1,
+            )
+        elif rel not in listed:
+            report.warn(
+                "JSON_STRAY",
+                "File holds a template array but ModInfo.json does not list it, so "
+                "the mod manager parses it and then ignores what is in it.",
+                rel, 1,
+            )
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--mod", default=".")
-    parser.add_argument("--config", default=".github/ti-validate.jsonc")
+    parser.add_argument("--config", default="")
     args = parser.parse_args()
 
     config = load_config(args.mod, args.config)
     report = Report("Template structure")
+
+    modinfo_path = os.path.join(args.mod, MODINFO)
+    listed = set()
+    if os.path.isfile(modinfo_path):
+        try:
+            entries = json.loads(read_text(modinfo_path)).get("TemplatesToConcatArrays")
+            listed = {e for e in entries or [] if isinstance(e, str)}
+        except (ValueError, AttributeError):
+            pass  # check_modinfo reports a broken ModInfo.json
+    check_stray_json(args.mod, listed, report)
 
     templates = load_templates(args.mod, report)
     if not templates:
