@@ -41,8 +41,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      # The version in ModInfo.json is what the game shows, so it is also what
-      # the tag says. Bumping it is the whole act of releasing.
       - name: Read the mod metadata
         id: modinfo
         env:
@@ -72,8 +70,6 @@ jobs:
 
           echo "→ ModInfo.json version: $VERSION"
 
-      # Re-running on a version that is already out would rewrite a release
-      # people have downloaded, so it stops here instead.
       - name: Look for an existing release
         id: existing
         env:
@@ -88,8 +84,6 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # Terra Invicta reads a mod as a folder under Mods/Enabled, so the archive
-      # carries that folder rather than its loose contents.
       - name: Build the archive
         id: package
         if: steps.existing.outputs.exists == 'false'
@@ -105,8 +99,6 @@ jobs:
           mkdir -p "$STAGE"
           cp "$MOD_PATH/ModInfo.json" "$STAGE/"
 
-          # Only the templates ModInfo.json lists reach the game, so only those
-          # go into the archive. The validator is what holds that list complete.
           while IFS= read -r entry; do
             [[ -z "$entry" ]] && continue
             if [[ ! -f "$MOD_PATH/$entry" ]]; then
@@ -134,7 +126,7 @@ jobs:
 
       - name: Create the release
         if: steps.existing.outputs.exists == 'false'
-        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65
         with:
           token: ${{ github.token }}
           tag_name: ${{ steps.modinfo.outputs.tag }}

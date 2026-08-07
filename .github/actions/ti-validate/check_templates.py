@@ -1,27 +1,3 @@
-"""Template structure checks for a Terra Invicta mod.
-
-Every TIXxxTemplate.json holds an array of records, and the game addresses a
-record by its dataName. A record without one is unreachable, and two records
-sharing one are a single record with the later one winning.
-
-  JSON_PARSE          the file does not parse
-  JSON_SHAPE          the file does not hold an array
-  TEMPLATE_EMPTY      the array is empty
-  RECORD_SHAPE        an element of the array is not an object
-  RECORD_NO_DATANAME  a record carries no usable dataName
-  RECORD_DUPLICATE    a dataName is defined twice in the same template
-  RECORD_PREFIX       a dataName carries none of the mod's prefixes
-  RECORD_FIELD        a record is missing a field every one of its siblings has
-  JSON_STRAY          a .json the mod manager parses but no template array
-
-JSON_STRAY is the one that bites hardest. The mod manager walks the whole mod
-folder, hands every .json and .jsonc it finds to its reader, and expects an
-array of records back. One that holds an object instead — a tool's config, a
-schema, anything — stops the load with "MOD MANAGER FAILED TO LOAD JSON" and
-the mod does not install at all. Renaming it .jsonc does not help; that is
-scanned too.
-"""
-
 import argparse
 import json
 import os
@@ -30,8 +6,6 @@ import sys
 from tilib import (MODINFO, TEMPLATE_JSON, Report, id_prefixes, load_config,
                    load_templates, read_text, walk_scanned_json)
 
-# Below this many records, "every sibling has it" says more about the sample
-# size than about the field.
 FIELD_QUORUM = 4
 
 
@@ -88,7 +62,6 @@ def check_records(templates, prefixes, report):
 
 
 def check_fields(templates, report):
-    """A field every sibling carries and one record does not is usually an omission."""
     for template in sorted(templates):
         records = [r for r in templates[template] if isinstance(r, dict)]
         if len(records) < FIELD_QUORUM:
@@ -118,7 +91,6 @@ def check_fields(templates, report):
 
 
 def check_stray_json(mod_root, listed, report):
-    """Holds every .json the mod manager will open to what it can actually read."""
     for full, rel in walk_scanned_json(mod_root):
         if rel == MODINFO or TEMPLATE_JSON.match(rel):
             continue
@@ -170,7 +142,7 @@ def main():
             entries = json.loads(read_text(modinfo_path)).get("TemplatesToConcatArrays")
             listed = {e for e in entries or [] if isinstance(e, str)}
         except (ValueError, AttributeError):
-            pass  # check_modinfo reports a broken ModInfo.json
+            pass
     check_stray_json(args.mod, listed, report)
 
     templates = load_templates(args.mod, report)
