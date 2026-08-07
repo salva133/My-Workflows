@@ -121,7 +121,7 @@ def check_membership(templates, prefixes, report):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--mod", default=".")
-    parser.add_argument("--config", default=".github/ti-validate.json")
+    parser.add_argument("--config", default=".github/ti-validate.jsonc")
     args = parser.parse_args()
 
     config = load_config(args.mod, args.config)

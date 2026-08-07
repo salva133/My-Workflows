@@ -9,7 +9,7 @@ inputs:
   config:
     description: 'Path to the mod-side validator config, relative to the mod root.'
     required: false
-    default: '.github/ti-validate.json'
+    default: '.github/ti-validate.jsonc'
 
 runs:
   using: composite
