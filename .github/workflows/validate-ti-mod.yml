@@ -7,7 +7,7 @@ on:
         description: 'Path to the mod-side validator config.'
         type: string
         required: false
-        default: '.github/ti-validate.json'
+        default: '.github/ti-validate.jsonc'
       mod_path:
         description: 'Path to the mod root, the folder holding ModInfo.json.'
         type: string
