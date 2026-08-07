@@ -1,0 +1,37 @@
+name: 'Validate Terra Invicta Mod'
+description: 'Runs the metadata, template, localization and cross-reference checks over a Terra Invicta mod.'
+
+inputs:
+  mod-path:
+    description: 'Path to the mod root, the folder holding ModInfo.json.'
+    required: false
+    default: '.'
+  config:
+    description: 'Path to the mod-side validator config, relative to the mod root.'
+    required: false
+    default: '.github/ti-validate.json'
+
+runs:
+  using: composite
+  steps:
+    - name: Run the validators
+      shell: bash
+      working-directory: ${{ inputs.mod-path }}
+      run: |
+        set -uo pipefail
+
+        STATUS=0
+        CONFIG='${{ inputs.config }}'
+
+        python3 "$GITHUB_ACTION_PATH/check_modinfo.py" --mod . --config "$CONFIG" || STATUS=1
+        echo
+
+        python3 "$GITHUB_ACTION_PATH/check_templates.py" --mod . --config "$CONFIG" || STATUS=1
+        echo
+
+        python3 "$GITHUB_ACTION_PATH/check_localization.py" --mod . --config "$CONFIG" || STATUS=1
+        echo
+
+        python3 "$GITHUB_ACTION_PATH/check_references.py" --mod . --config "$CONFIG" || STATUS=1
+
+        exit $STATUS
