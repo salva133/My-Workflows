@@ -1,21 +1,3 @@
-"""Cross-reference checks for a Terra Invicta mod.
-
-Records point at each other by dataName as plain strings, so a typo is not a
-load error: the game reads the name, finds nothing, and carries on without the
-army, the claim or the region. Names the mod's own prefixes mark have to
-resolve inside the mod, which is what makes them checkable without a copy of
-the vanilla data.
-
-TIMetaTemplate is the second half. A scenario names the record sets it loads,
-and each of those sets names its members, so a nation the meta template does
-not list is a nation the scenario never sees.
-
-  REF_UNRESOLVED  a prefixed name that no record in the mod defines
-  META_UNLISTED   a record no TIMetaTemplate entry of its type lists
-  META_TYPE       a meta entry whose templateType is not a template name
-  META_AFFIX      a scenario prefix without the matching localization postfix
-"""
-
 import argparse
 import sys
 
@@ -113,9 +95,6 @@ def check_membership(templates, prefixes, report):
                 f"type {template} lists it, so no scenario ever loads it.",
                 f"{template}.json", 1,
             )
-
-    # A meta entry that lists a prefixed name the mod does not define is caught by
-    # REF_UNRESOLVED, which reads templateNames along with every other field.
 
 
 def main():

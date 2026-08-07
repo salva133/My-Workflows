@@ -1,24 +1,11 @@
-"""Shared helpers for the Terra Invicta mod validators.
-
-A Terra Invicta mod is a flat folder: ModInfo.json names the template files,
-each TIXxxTemplate.json holds an array of records keyed by dataName, and each
-TIXxxTemplate.<lang> holds key=value localization lines. Everything the
-validators need is read through this module so the checks agree on what a
-template, a record and a localization key are.
-"""
-
 import json
 import os
 import re
 import sys
 
 TEMPLATE_JSON = re.compile(r"^(TI[A-Za-z0-9]*Template)\.json$")
-# Terra Invicta's mod manager walks the whole mod folder and hands every file
-# whose name ends this way to its JSON reader, wherever it sits.
 SCANNED_JSON = re.compile(r"\.jsonc?$", re.IGNORECASE)
 SKIP_DIRS = {".git"}
-# The language part is anything but json, which is the template itself rather
-# than a translation of it.
 LOC_FILE = re.compile(r"^(TI[A-Za-z0-9]*Template)\.(?!json$)([A-Za-z]{2,5})$")
 LOC_LINE = re.compile(r"^([A-Za-z0-9_.\-]+)=(.*)$")
 LOC_KEY = re.compile(r"^(TI[A-Za-z0-9]*Template)\.([A-Za-z0-9_]+)\.(.+)$")
@@ -28,9 +15,6 @@ GAME_VERSION = re.compile(r"^\d+(\.\d+)*$")
 
 MODINFO = "ModInfo.json"
 
-# Fields whose string values look like identifiers but never point at another
-# record. friendlyName is a display alias, and the two scenario fields carry
-# the prefix itself rather than something the prefix is part of.
 DEFAULT_IGNORED_REFERENCE_FIELDS = (
     "friendlyName",
     "scenarioPrefix",
@@ -39,7 +23,6 @@ DEFAULT_IGNORED_REFERENCE_FIELDS = (
 
 
 class Report:
-    """Collects findings and prints them as GitHub Actions annotations."""
 
     def __init__(self, name):
         self.name = name
@@ -94,11 +77,6 @@ def read_lines(path):
 
 
 def walk_scanned_json(mod_root):
-    """Yields (full, rel) for every file the game's mod manager parses as JSON.
-
-    Recursive, because the mod manager is: a file under .github counts just as
-    much as one beside ModInfo.json.
-    """
     for current, dirs, files in os.walk(mod_root):
         dirs[:] = sorted(d for d in dirs if d not in SKIP_DIRS)
         for name in sorted(files):
@@ -122,7 +100,6 @@ def load_config(mod_root, config_path):
 
 
 def load_modinfo(mod_root):
-    """Returns the parsed ModInfo.json, or None when it is missing or broken."""
     full = os.path.join(mod_root, MODINFO)
     if not os.path.isfile(full):
         return None
@@ -133,22 +110,11 @@ def load_modinfo(mod_root):
 
 
 def id_prefixes(config, templates):
-    """The prefixes the mod's own dataNames carry.
-
-    The configured prefixes and the scenarioPrefix values TIMetaTemplate.json
-    declares are both facts about the mod, so both count. Taking the union
-    rather than letting the config win matters when a scenario is added: it
-    arrives with its own prefix, and the checks cover it from the first commit
-    instead of staying blind to every name in it until someone remembers to
-    list the prefix as well. A mod that declares neither is not held to the
-    prefix-dependent checks at all.
-    """
     declared = {prefix for prefix, _ in scenario_affixes(templates) if prefix}
     return sorted(set(config.get("id_prefixes") or ()) | declared)
 
 
 def template_files(mod_root):
-    """Yields (template_name, file_name) for every TIXxxTemplate.json present."""
     for name in sorted(os.listdir(mod_root)):
         match = TEMPLATE_JSON.match(name)
         if match and os.path.isfile(os.path.join(mod_root, name)):
@@ -156,7 +122,6 @@ def template_files(mod_root):
 
 
 def localization_files(mod_root):
-    """Yields (template_name, language, file_name) for every localization file."""
     for name in sorted(os.listdir(mod_root)):
         match = LOC_FILE.match(name)
         if match and os.path.isfile(os.path.join(mod_root, name)):
@@ -164,11 +129,6 @@ def localization_files(mod_root):
 
 
 def load_templates(mod_root, report=None):
-    """Maps a template name to its list of records.
-
-    A file that does not parse, or that does not hold an array, is reported
-    and left out, so the later checks work on what is readable.
-    """
     templates = {}
     for template, name in template_files(mod_root):
         try:
@@ -191,7 +151,6 @@ def load_templates(mod_root, report=None):
 
 
 def data_names(templates):
-    """Maps a template name to the set of dataNames it defines."""
     names = {}
     for template, records in templates.items():
         found = set()
@@ -205,17 +164,10 @@ def data_names(templates):
 
 
 def all_data_names(templates):
-    """Every dataName the mod defines, across all of its templates."""
     return set().union(*data_names(templates).values()) if templates else set()
 
 
 def scenario_affixes(templates):
-    """The (prefix, postfix) pairs the scenarios rename records by.
-
-    A scenario declares scenarioPrefix and scenarioLocalizationPostfix, and the
-    game looks a record's strings up under the dataName with the prefix taken
-    off and the postfix put on: 1898_AFG is localized as AFG.1898.
-    """
     pairs = set()
     for record in templates.get("TIMetaTemplate", []):
         if not isinstance(record, dict):
@@ -228,7 +180,6 @@ def scenario_affixes(templates):
 
 
 def localization_candidates(name, affixes):
-    """Every dataName a localization key's name part could be addressing."""
     candidates = {name}
     for prefix, postfix in affixes:
         if postfix and name.endswith(postfix):
@@ -239,11 +190,6 @@ def localization_candidates(name, affixes):
 
 
 def parse_localization(path, file_name, report):
-    """Reads a localization file into [(line_number, key, value)].
-
-    Blank lines and // comments are skipped. Anything else has to read
-    key=value, and a line that does not is reported and dropped.
-    """
     entries = []
     for number, line in enumerate(read_lines(path), 1):
         text = line.strip()
@@ -263,11 +209,6 @@ def parse_localization(path, file_name, report):
 
 
 def walk_strings(value, field=""):
-    """Yields (field_name, string) for every string inside a record.
-
-    The field name is the key the string sits under, with list nesting seen
-    through, so a value in "templateNames": [...] is reported as templateNames.
-    """
     if isinstance(value, str):
         yield field, value
     elif isinstance(value, list):

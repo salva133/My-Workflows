@@ -1,20 +1,3 @@
-"""ModInfo.json checks for a Terra Invicta mod.
-
-ModInfo.json is the only file the game reads by name. Everything else reaches
-the game through TemplatesToConcatArrays, so a template that is not listed
-there is a file the game never opens, with no complaint on the way.
-
-  MODINFO_MISSING       the mod ships no ModInfo.json
-  MODINFO_JSON          ModInfo.json does not parse
-  MODINFO_FIELD         a field the game reads is missing or empty
-  MODINFO_VERSION       Version does not read X.Y.Z
-  MODINFO_GAME_VERSION  GameVersion is not a dotted number
-  MODINFO_MISSING_FILE  TemplatesToConcatArrays names a file that is not there
-  MODINFO_UNLISTED      a template or localization file no entry names
-  MODINFO_DUPLICATE     the same file is listed twice
-  README_VERSION        the README does not mention the version being shipped
-"""
-
 import argparse
 import json
 import os

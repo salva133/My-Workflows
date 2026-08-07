@@ -1,22 +1,3 @@
-"""Localization checks for a Terra Invicta mod.
-
-A localization file reads TIXxxTemplate.field.name=text, one line each. The
-name part is the record's dataName, except under a scenario, where the game
-takes the scenarioPrefix off and puts the scenarioLocalizationPostfix on, so
-1898_AFG is addressed as AFG.1898.
-
-  LOC_ENCODING     the file is not valid UTF-8
-  LOC_SHAPE        a line does not read key=value
-  LOC_KEY_SHAPE    a key does not read TIXxxTemplate.field.name
-  LOC_FILE_MISMATCH a key names a template other than the file's own
-  LOC_DUPLICATE    a key is defined twice in one file
-  LOC_EMPTY        a key carries no text
-  LOC_UNKNOWN_NAME a key addresses a record the mod does not define
-  LOC_MISSING      a language is missing a key another language carries
-  LOC_LANGUAGE     a template is localized in some of the mod's languages only
-  LOC_PLACEHOLDER  translations of one key disagree on their {n} placeholders
-"""
-
 import argparse
 import os
 import sys
@@ -27,11 +8,6 @@ from tilib import (LOC_KEY, PLACEHOLDER, Report, data_names, load_config,
 
 
 def check_encoding(mod_root, files, report):
-    """Reports files that are not valid UTF-8.
-
-    A German localization saved as cp1252 reaches the game as mojibake rather
-    than as an error, so the umlauts turn to noise on screen.
-    """
     readable = []
     for template, language, name in files:
         with open(os.path.join(mod_root, name), "rb") as fh:
@@ -51,7 +27,6 @@ def check_encoding(mod_root, files, report):
 
 
 def collect(mod_root, files, report):
-    """Maps (template, language) to {key: (line, value)}, reporting shape faults."""
     collected = {}
     for template, language, name in files:
         entries = parse_localization(os.path.join(mod_root, name), name, report)
@@ -122,7 +97,6 @@ def check_names(collected, templates, report):
 
 
 def check_parity(collected, reference, report):
-    """Holds every language to the same key set, template by template."""
     languages = sorted({language for _, language in collected})
     if len(languages) < 2:
         return
@@ -165,7 +139,6 @@ def check_parity(collected, reference, report):
 
 
 def check_placeholders(collected, reference, report):
-    """The {n} tokens are filled by the game, so every translation needs the same ones."""
     by_key = {}
     for (template, language), (file_name, keys) in collected.items():
         for key, (number, value) in keys.items():

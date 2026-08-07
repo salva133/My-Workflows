@@ -1,10 +1,6 @@
 name: 'Validate Terra Invicta Mod'
 description: 'Runs the metadata, template, localization and cross-reference checks over a Terra Invicta mod.'
 
-# The settings arrive as inputs rather than as a file in the repository on
-# purpose. Terra Invicta's mod manager parses every .json and .jsonc under the
-# mod folder, so a config file living there stops the mod from installing for
-# anyone who copies the repository into Mods/Enabled.
 inputs:
   mod-path:
     description: 'Path to the mod root, the folder holding ModInfo.json.'
@@ -34,8 +30,6 @@ inputs:
 runs:
   using: composite
   steps:
-    # Written outside the mod folder, so the validators read settings the game
-    # never sees.
     - name: Assemble the settings
       id: settings
       shell: bash
