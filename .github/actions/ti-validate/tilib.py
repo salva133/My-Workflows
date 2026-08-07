@@ -13,6 +13,10 @@ import re
 import sys
 
 TEMPLATE_JSON = re.compile(r"^(TI[A-Za-z0-9]*Template)\.json$")
+# Terra Invicta's mod manager walks the whole mod folder and hands every file
+# whose name ends this way to its JSON reader, wherever it sits.
+SCANNED_JSON = re.compile(r"\.jsonc?$", re.IGNORECASE)
+SKIP_DIRS = {".git"}
 # The language part is anything but json, which is the template itself rather
 # than a translation of it.
 LOC_FILE = re.compile(r"^(TI[A-Za-z0-9]*Template)\.(?!json$)([A-Za-z]{2,5})$")
@@ -89,9 +93,26 @@ def read_lines(path):
     return read_text(path).splitlines()
 
 
+def walk_scanned_json(mod_root):
+    """Yields (full, rel) for every file the game's mod manager parses as JSON.
+
+    Recursive, because the mod manager is: a file under .github counts just as
+    much as one beside ModInfo.json.
+    """
+    for current, dirs, files in os.walk(mod_root):
+        dirs[:] = sorted(d for d in dirs if d not in SKIP_DIRS)
+        for name in sorted(files):
+            if SCANNED_JSON.search(name):
+                full = os.path.join(current, name)
+                yield full, os.path.relpath(full, mod_root).replace(os.sep, "/")
+
+
 def load_config(mod_root, config_path):
-    full = os.path.join(mod_root, config_path)
+    if not config_path:
+        return {}
+    full = config_path if os.path.isabs(config_path) else os.path.join(mod_root, config_path)
     if not os.path.isfile(full):
+        print(f"::notice::No validator config at {config_path}, so its defaults apply.")
         return {}
     try:
         return json.loads(read_text(full))

@@ -195,7 +195,7 @@ def check_placeholders(collected, reference, report):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--mod", default=".")
-    parser.add_argument("--config", default=".github/ti-validate.jsonc")
+    parser.add_argument("--config", default="")
     args = parser.parse_args()
 
     config = load_config(args.mod, args.config)

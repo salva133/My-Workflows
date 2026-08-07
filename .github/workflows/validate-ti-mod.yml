@@ -3,11 +3,31 @@ name: Validate TI Mod
 on:
   workflow_call:
     inputs:
-      config:
-        description: 'Path to the mod-side validator config.'
+      id_prefixes:
+        description: 'Prefixes the mod''s own dataNames carry, comma or newline separated. Empty falls back to the scenarioPrefix values TIMetaTemplate declares.'
         type: string
         required: false
-        default: '.github/ti-validate.jsonc'
+        default: ''
+      ignore_reference_fields:
+        description: 'Fields whose values look like identifiers but never point at another record, comma or newline separated.'
+        type: string
+        required: false
+        default: ''
+      reference_language:
+        description: 'The language other translations are held to.'
+        type: string
+        required: false
+        default: 'en'
+      check_missing_fields:
+        description: 'Report a record missing a field every one of its siblings carries.'
+        type: boolean
+        required: false
+        default: true
+      config:
+        description: 'Path to a config file to use instead of the inputs above. The file has to sit somewhere the game does not scan, since the mod manager parses every .json under the mod folder.'
+        type: string
+        required: false
+        default: ''
       mod_path:
         description: 'Path to the mod root, the folder holding ModInfo.json.'
         type: string
@@ -31,4 +51,8 @@ jobs:
       - uses: salva133/My-Workflows/.github/actions/ti-validate@latest
         with:
           mod-path: ${{ inputs.mod_path }}
+          id-prefixes: ${{ inputs.id_prefixes }}
+          ignore-reference-fields: ${{ inputs.ignore_reference_fields }}
+          reference-language: ${{ inputs.reference_language }}
+          check-missing-fields: ${{ inputs.check_missing_fields }}
           config: ${{ inputs.config }}
