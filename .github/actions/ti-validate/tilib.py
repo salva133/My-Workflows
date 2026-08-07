@@ -135,14 +135,16 @@ def load_modinfo(mod_root):
 def id_prefixes(config, templates):
     """The prefixes the mod's own dataNames carry.
 
-    Configured prefixes win. Without any, the scenarioPrefix values declared in
-    TIMetaTemplate.json are the next best thing, and a mod that declares
-    neither is simply not held to the prefix-dependent checks.
+    The configured prefixes and the scenarioPrefix values TIMetaTemplate.json
+    declares are both facts about the mod, so both count. Taking the union
+    rather than letting the config win matters when a scenario is added: it
+    arrives with its own prefix, and the checks cover it from the first commit
+    instead of staying blind to every name in it until someone remembers to
+    list the prefix as well. A mod that declares neither is not held to the
+    prefix-dependent checks at all.
     """
-    configured = config.get("id_prefixes")
-    if configured:
-        return sorted(set(configured))
-    return sorted({prefix for prefix, _ in scenario_affixes(templates) if prefix})
+    declared = {prefix for prefix, _ in scenario_affixes(templates) if prefix}
+    return sorted(set(config.get("id_prefixes") or ()) | declared)
 
 
 def template_files(mod_root):
