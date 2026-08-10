@@ -50,15 +50,30 @@ def check_membership(templates, prefixes, report):
         template_type = record.get("templateType")
         if not isinstance(template_type, str) or not template_type:
             continue
-        if template_type != "TIMetaTemplate" and template_type not in templates:
-            report.warn(
-                "META_TYPE",
-                f"Meta entry '{record.get('dataName', '<unnamed>')}' declares "
-                f"templateType '{template_type}', which is not a template the mod "
-                "ships. Its members have to come from vanilla.",
-                "TIMetaTemplate.json", 1,
-            )
         names = record.get("templateNames")
+        if template_type != "TIMetaTemplate" and template_type not in templates:
+            entry = record.get("dataName", "<unnamed>")
+            claimed = sorted(
+                n for n in (names if isinstance(names, list) else [])
+                if isinstance(n, str) and any(n.startswith(p) for p in prefixes)
+            )
+            if claimed:
+                report.warn(
+                    "META_TYPE",
+                    f"Meta entry '{entry}' declares templateType '{template_type}', "
+                    f"which is not a template the mod ships, yet lists "
+                    f"{', '.join(claimed)} under the mod's own prefix. Vanilla cannot "
+                    "carry those names, so the members resolve to nothing.",
+                    "TIMetaTemplate.json", 1,
+                )
+            else:
+                report.notice(
+                    "META_TYPE",
+                    f"Meta entry '{entry}' declares templateType '{template_type}', "
+                    "which is not a template the mod ships, so every member is taken "
+                    "to come from vanilla.",
+                    "TIMetaTemplate.json", 1,
+                )
         if isinstance(names, list):
             listed.setdefault(template_type, set()).update(
                 n for n in names if isinstance(n, str)
