@@ -37,6 +37,13 @@ jobs:
           fi
           echo "→ metadata.json version: $VERSION"
 
+          GAME_VERSION=$(jq -r '.supported_game_version // empty' "$FILE")
+          if [[ ! $GAME_VERSION =~ ^[0-9]+(\.([0-9]+|\*))*$ ]]; then
+            echo "❌ Invalid or missing supported_game_version in $FILE: '$GAME_VERSION'"
+            exit 1
+          fi
+          echo "→ metadata.json supported_game_version: $GAME_VERSION"
+
           shopt -s nullglob
           LOC_FILES=(localization/english/*_mod_l_english.yml)
           if [[ ${#LOC_FILES[@]} -eq 0 ]]; then
@@ -54,6 +61,16 @@ jobs:
             else
               echo "ℹ️ No 'Mod Version: X.Y.Z' marker in $LOC — skipping"
             fi
+
+            if grep -q 'Game Version: [0-9][0-9.]*\*\?' "$LOC"; then
+              # Same rule as above: only the marker is rewritten, and a
+              # wildcard game version such as 1.13.* is carried through as
+              # metadata.json states it.
+              sed -i 's/Game Version: [0-9][0-9.]*\*\?/Game Version: '"$GAME_VERSION"'/' "$LOC"
+              echo "→ Synced Game Version in: $LOC"
+            else
+              echo "ℹ️ No 'Game Version: X.Y.Z' marker in $LOC — skipping"
+            fi
           done
 
       - name: Commit & push if changed
@@ -70,6 +87,6 @@ jobs:
           if git diff --staged --quiet; then
             echo "✅ Localization already in sync — nothing to commit."
           else
-            git commit -m "ci: sync mod version from metadata.json into localization"
+            git commit -m "ci: sync versions from metadata.json into localization"
             git push
           fi
