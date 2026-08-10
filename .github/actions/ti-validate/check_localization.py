@@ -87,7 +87,9 @@ def check_names(collected, templates, report):
             match = LOC_KEY.match(key)
             if not match:
                 continue
-            if not (localization_candidates(match.group(3), affixes) & defined):
+            name_last = localization_candidates(match.group(3), affixes)
+            name_middle = localization_candidates(match.group(2), affixes)
+            if not ((name_last | name_middle) & defined):
                 report.error(
                     "LOC_UNKNOWN_NAME",
                     f"Key '{key}' addresses a record {template}.json does not define. "
