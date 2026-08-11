@@ -11,6 +11,16 @@ Each check is opt-in, since the two mods this runs against hold different rules.
                   because the same rule leaves every comment already there alone,
                   and a vendored vanilla file is skipped, because the comments
                   arriving with it are vanilla's rather than the mod's
+  META_LOC        out-of-game wording in a player-facing localization value,
+                  where the mod's rule is that shown text stays in-universe.
+                  Three classes are read: developer notes (TODO, WIP and kin),
+                  meta vocabulary (the mod, vanilla, versions, the Steam
+                  Workshop), and a bare snake_case identifier outside the
+                  $...$, [...] and #tag constructs the engine renders, which
+                  is script leaking into prose. Everything is a warning, since
+                  an in-universe sentence can use any of these words
+                  legitimately, and the keys the config exempts are the
+                  surfaces that are meta by definition
 """
 
 import argparse
@@ -20,11 +30,20 @@ import re
 import subprocess
 import sys
 
-from vic3lib import Report, load_config, read_lines, walk_files
+from vic3lib import LOC_LINE, Report, load_config, read_lines, walk_files
 
 ORDERED = re.compile(r"\bordered_\w+\s*=\s*\{")
 QUOTED = re.compile(r'"[^"]*"')
 PREFIX_DIRS = ("common", "events", "localization")
+
+DEV_NOTE = re.compile(r"\b(TODO|FIXME|WIP|XXX|PLACEHOLDER)\b", re.IGNORECASE)
+META_TERM = re.compile(
+    r"\b(mod|mods|modder|modders|modding|vanilla|version|versions|savegame|"
+    r"savegames|load order|Steam Workshop|DLC)\b",
+    re.IGNORECASE,
+)
+RENDERED = re.compile(r"\[[^\]]*\]|\$[^$]*\$|#!|#\w+|@\w+!|\\n")
+SNAKE_CASE = re.compile(r"\b[a-z0-9]+(?:_[a-z0-9]+)+\b")
 
 
 def matches(rel, patterns):
@@ -141,6 +160,38 @@ def check_added_comments(mod_root, vanilla_root, config, base, report):
             )
 
 
+def check_meta_localization(mod_root, config, report):
+    exempt = config.get("meta_localization_exempt", [])
+    for full, rel in walk_files(mod_root, (".yml",), "localization"):
+        for number, line in enumerate(read_lines(full), 1):
+            match = LOC_LINE.match(line)
+            if not match:
+                continue
+            key, value = match.group(2), match.group(4)
+            if not value or matches(key, exempt):
+                continue
+            found = []
+            note = DEV_NOTE.search(value)
+            if note:
+                found.append(f"the developer note '{note.group(0)}'")
+            term = META_TERM.search(value)
+            if term:
+                found.append(f"the meta term '{term.group(0)}'")
+            prose = RENDERED.sub(" ", value)
+            snake = SNAKE_CASE.search(prose)
+            if snake:
+                found.append(f"the identifier '{snake.group(0)}' outside any "
+                             "rendered construct")
+            if found:
+                report.warn(
+                    "META_LOC",
+                    f"'{key}' carries {' and '.join(found)}. Player-facing "
+                    "localization stays in-universe; a surface that is meta by "
+                    "definition belongs in meta_localization_exempt.",
+                    rel, number,
+                )
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--mod", default=".")
@@ -163,6 +214,9 @@ def main():
             print("::notice::No vanilla checkout available, so the file prefix check "
                   "is skipped. A file standing in for a vanilla one is told apart by "
                   "carrying vanilla's own path, which needs vanilla to see.")
+
+    if config.get("forbid_meta_in_localization"):
+        check_meta_localization(args.mod, config, report)
 
     if config.get("forbid_added_comments"):
         if args.diff_base:
