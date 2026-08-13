@@ -1,0 +1,71 @@
+name: Tag Vic3 Mod
+
+on:
+  workflow_call:
+    inputs:
+      tag_prefix:
+        description: 'Put in front of the metadata.json version to form the tag.'
+        type: string
+        required: false
+        default: 'v'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: tag-vic3-mod-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    # Only the default branch is tagged, so a merge into it is the one thing that cuts a version.
+    if: github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Read the mod version
+        id: metadata
+        env:
+          TAG_PREFIX: ${{ inputs.tag_prefix }}
+        run: |
+          set -euo pipefail
+
+          FILE=".metadata/metadata.json"
+          if [[ ! -f "$FILE" ]]; then
+            echo "::error title=No metadata.json::'$FILE' does not exist, so there is nothing to tag."
+            exit 1
+          fi
+
+          VERSION=$(jq -r '.version // empty' "$FILE")
+          if [[ ! $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error title=Invalid version::metadata.json carries version '$VERSION', which does not read X.Y.Z."
+            exit 1
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG_PREFIX}${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "→ metadata.json version: $VERSION"
+
+      - name: Tag the merge commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.metadata.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          # The remote is the authority: a tag deleted locally still blocks the push.
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "::notice title=Tag skipped::$TAG already exists. Bump version in .metadata/metadata.json to cut a new one."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git tag -a "$TAG" -m "$TAG"
+          git push origin "refs/tags/$TAG"
+          echo "→ tagged ${GITHUB_SHA} as $TAG"
