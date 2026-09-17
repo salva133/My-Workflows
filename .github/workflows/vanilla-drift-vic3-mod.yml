@@ -60,18 +60,34 @@ jobs:
           write-baseline: ${{ inputs.write_baseline }}
 
       - name: Record the new baseline
-        if: ${{ inputs.write_baseline }}
+        if: ${{ success() && inputs.write_baseline }}
+        env:
+          BRANCH: ${{ github.ref_name }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .github/vanilla-baseline.json
+
           if git diff --staged --quiet; then
             echo "✅ Baseline already current."
-          else
-            git commit -m "ci: record the vanilla baseline for the vendored copies"
-            git push
+            exit 0
           fi
+
+          git commit -m "ci: record the vanilla baseline for the vendored copies"
+
+          for attempt in 1 2 3 4 5; do
+            if git push origin "HEAD:$BRANCH"; then
+              echo "Pushed on attempt $attempt."
+              exit 0
+            fi
+            echo "Push attempt $attempt was rejected, rebasing onto the remote."
+            sleep $(( attempt * 2 ))
+            git pull --rebase --autostash origin "$BRANCH"
+          done
+
+          echo "::error title=Push failed::The baseline could not be pushed after 5 attempts."
+          exit 1
 
       # An issue rather than a failed run, because the drift is news about
       # vanilla rather than a fault in the change that happens to be building.
@@ -90,7 +106,8 @@ jobs:
             "" \
             "Re-sync the copies that matter, then run this workflow again with **write_baseline** set so the new state is recorded. Running it with write_baseline without re-syncing silences the check without fixing anything." )
 
-          EXISTING=$(gh issue list --state open --search "$TITLE in:title" --json number --jq '.[0].number // empty')
+          EXISTING=$(gh issue list --state open --limit 100 --json number,title \
+            --jq 'map(select(.title == env.TITLE)) | .[0].number // empty')
           if [[ -n "$EXISTING" ]]; then
             gh issue comment "$EXISTING" --body "$BODY"
             echo "Commented on issue #$EXISTING."
