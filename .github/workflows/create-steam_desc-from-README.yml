@@ -2,6 +2,12 @@ name: Create steam_desc from README
 
 on:
   workflow_call:
+    inputs:
+      scripts_ref:
+        description: 'Ref of My-Workflows the conversion script is taken from.'
+        type: string
+        required: false
+        default: 'latest'
 
 permissions:
   contents: write
@@ -19,13 +25,14 @@ jobs:
       - name: Checkout target repository
         uses: actions/checkout@v6
         with:
+          ref: ${{ github.head_ref || github.ref_name }}
           fetch-depth: 0
 
       - name: Checkout workflow scripts (My-Workflows)
         uses: actions/checkout@v6
         with:
           repository: salva133/My-Workflows
-          ref: latest
+          ref: ${{ inputs.scripts_ref }}
           path: .workflow-scripts
           fetch-depth: 1
           persist-credentials: false
@@ -35,19 +42,30 @@ jobs:
 
       - name: Commit and push if changed
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          BRANCH: ${{ github.head_ref || github.ref_name }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git pull -r --autostash
-
           git add steam_desc.txt
 
           if git diff --staged --quiet; then
             echo "No changes - nothing to commit."
-          else
-            git commit -m "ci: update steam_desc.txt from README.md (BBCode)"
-            git push
+            exit 0
           fi
+
+          git commit -m "ci: update steam_desc.txt from README.md (BBCode)"
+
+          for attempt in 1 2 3 4 5; do
+            if git push origin "HEAD:$BRANCH"; then
+              echo "Pushed on attempt $attempt."
+              exit 0
+            fi
+            echo "Push attempt $attempt was rejected, rebasing onto the remote."
+            sleep $(( attempt * 2 ))
+            git pull --rebase --autostash origin "$BRANCH"
+          done
+
+          echo "::error title=Push failed::steam_desc.txt could not be pushed after 5 attempts."
+          exit 1

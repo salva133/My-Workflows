@@ -74,19 +74,32 @@ jobs:
           done
 
       - name: Commit & push if changed
+        env:
+          BRANCH: ${{ github.head_ref || github.ref_name }}
         run: |
           set -euo pipefail
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git pull -r --autostash
-
           git add localization/english/*_mod_l_english.yml
 
           if git diff --staged --quiet; then
             echo "✅ Localization already in sync — nothing to commit."
-          else
-            git commit -m "ci: sync versions from metadata.json into localization"
-            git push
+            exit 0
           fi
+
+          git commit -m "ci: sync versions from metadata.json into localization"
+
+          for attempt in 1 2 3 4 5; do
+            if git push origin "HEAD:$BRANCH"; then
+              echo "Pushed on attempt $attempt."
+              exit 0
+            fi
+            echo "Push attempt $attempt was rejected, rebasing onto the remote."
+            sleep $(( attempt * 2 ))
+            git pull --rebase --autostash origin "$BRANCH"
+          done
+
+          echo "::error title=Push failed::The localization sync could not be pushed after 5 attempts."
+          exit 1

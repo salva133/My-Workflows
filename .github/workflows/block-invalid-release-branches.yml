@@ -39,7 +39,7 @@ jobs:
           echo "PR is ready for review, merge is allowed."
 
   block-invalid-release-pr:
-    if: inputs.draft == false && inputs.base_ref == 'master'
+    if: inputs.draft == false && inputs.base_ref == (github.event.repository.default_branch || 'master')
 
     runs-on: ubuntu-latest
     timeout-minutes: 5

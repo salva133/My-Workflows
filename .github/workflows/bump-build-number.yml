@@ -13,7 +13,7 @@ permissions:
   pull-requests: read
 
 concurrency:
-  group: bump-build-number-${{ github.head_ref || github.ref_name }}
+  group: bump-build-number-${{ github.repository }}
   cancel-in-progress: false
 
 jobs:
@@ -23,10 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          # Check out the master branch (the PR's base), not the head branch:
-          # this runs on pull_request: closed, by which point the head branch
-          # is typically already deleted, so head_ref would fail to check out.
-          ref: master
+          ref: ${{ github.event.repository.default_branch }}
           token: ${{ github.token }}
           fetch-depth: 0
 
@@ -43,43 +40,41 @@ jobs:
 
       - name: Bump version by commit count
         id: bump
-        if: steps.commit-count.outputs.commit_count > 0
+        if: steps.commit-count.outputs.commit_count != '0'
+        env:
+          BUMP_BY: ${{ steps.commit-count.outputs.commit_count }}
         run: |
           set -euo pipefail
-          
+
           FILE=".metadata/metadata.json"
           if [[ ! -f "$FILE" ]]; then
-            echo "❌ metadata.json not found"
+            echo "::error title=No metadata.json::'$FILE' does not exist, so there is no version to bump."
             exit 1
           fi
-          
+
           OLD_VERSION=$(jq -r '.version // "0.0.0"' "$FILE")
           if [[ ! $OLD_VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "❌ Invalid version format: $OLD_VERSION"
+            echo "::error title=Invalid version::metadata.json carries version '$OLD_VERSION', which does not read X.Y.Z."
             exit 1
           fi
-          
+
           IFS='.' read -r major minor patch <<< "$OLD_VERSION"
-          BUMP_BY=${{ steps.commit-count.outputs.commit_count }}
           new_patch=$((patch + BUMP_BY))
           NEW_VERSION="$major.$minor.$new_patch"
-          
+
           echo "Bump: $OLD_VERSION → $NEW_VERSION (+$BUMP_BY)"
-          
-          # Update metadata.json
+
           jq --arg nv "$NEW_VERSION" '.version = $nv' "$FILE" > tmp.json && mv tmp.json "$FILE"
-          
-          # === Localization version bump (optional + first file only) ===
+
           echo "Checking localization files..."
           LOCALIZATION_FILE=""
 
+          shopt -s nullglob
           for YAML_FILE in localization/english/*_mod_l_english.yml; do
-            if [[ -f "$YAML_FILE" ]]; then
-              LOCALIZATION_FILE="$YAML_FILE"
-              echo "→ Updating Mod Version in: $YAML_FILE"
-              sed -i 's/Mod Version: [0-9]\+\.[0-9]\+\.[0-9]\+/Mod Version: '"$NEW_VERSION"'/' "$YAML_FILE"
-              break
-            fi
+            LOCALIZATION_FILE="$YAML_FILE"
+            echo "→ Updating Mod Version in: $YAML_FILE"
+            sed -i 's/Mod Version: [0-9]\+\.[0-9]\+\.[0-9]\+/Mod Version: '"$NEW_VERSION"'/' "$YAML_FILE"
+            break
           done
 
           if [[ -z "$LOCALIZATION_FILE" ]]; then
@@ -88,21 +83,23 @@ jobs:
             echo "✅ Localization file updated: $LOCALIZATION_FILE"
           fi
 
-          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
-          echo "LOCALIZATION_FILE=$LOCALIZATION_FILE" >> $GITHUB_ENV
+          {
+            echo "new_version=$NEW_VERSION"
+            echo "localization_file=$LOCALIZATION_FILE"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Commit & Push version bump
+        if: steps.bump.outcome == 'success'
         env:
+          BRANCH: ${{ github.event.repository.default_branch }}
           COMMIT_COUNT: ${{ steps.commit-count.outputs.commit_count }}
           NEW_VERSION: ${{ steps.bump.outputs.new_version }}
+          LOCALIZATION_FILE: ${{ steps.bump.outputs.localization_file }}
         run: |
           set -euo pipefail
-          LOCALIZATION_FILE="${LOCALIZATION_FILE:-}"
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git pull -r --autostash
 
           git add .metadata/metadata.json
 
@@ -116,4 +113,16 @@ jobs:
           fi
 
           git commit -m "ci: bump patch by ${COMMIT_COUNT} → ${NEW_VERSION}"
-          git push
+
+          for attempt in 1 2 3 4 5; do
+            if git push origin "HEAD:$BRANCH"; then
+              echo "Pushed on attempt $attempt."
+              exit 0
+            fi
+            echo "Push attempt $attempt was rejected, rebasing onto the remote."
+            sleep $(( attempt * 2 ))
+            git pull --rebase --autostash origin "$BRANCH"
+          done
+
+          echo "::error title=Push failed::The version bump could not be pushed after 5 attempts."
+          exit 1
