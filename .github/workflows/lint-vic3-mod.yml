@@ -1,0 +1,29 @@
+name: Lint Vic3 Mod
+
+on:
+  workflow_call:
+    inputs:
+      config:
+        description: 'Path to the mod-side validator config.'
+        type: string
+        required: false
+        default: '.github/vic3-validate.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lint-vic3-mod-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: salva133/My-Workflows/.github/actions/vic3-validate@latest
+        with:
+          mode: lint
+          config: ${{ inputs.config }}
