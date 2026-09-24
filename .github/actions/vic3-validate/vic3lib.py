@@ -11,6 +11,8 @@ LOC_LINE = re.compile(r'^(\s*)([\w.\-]+):\s*(\d*)\s*"(.*)"\s*$')
 LOC_KEY = re.compile(r"^\s*([\w.\-]+):\s*\d*\s*\"")
 TOP_LEVEL_KEY = re.compile(r"^\s*((?:TRY_)?(?:REPLACE|INJECT):)?([\w.\-]+)\s*=\s*\{")
 
+BOM = b"\xef\xbb\xbf"
+
 ENTRY_MODES = ("REPLACE:", "TRY_REPLACE:", "INJECT:", "TRY_INJECT:")
 
 
@@ -63,6 +65,22 @@ class Report:
 def read_text(path):
     with open(path, encoding="utf-8-sig", errors="replace") as fh:
         return fh.read()
+
+
+def read_raw(path):
+    """Returns (bom, text) with line endings untouched, or None if not UTF-8."""
+    with open(path, "rb") as fh:
+        data = fh.read()
+    bom = data.startswith(BOM)
+    try:
+        return bom, data[3 if bom else 0:].decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+
+
+def write_raw(path, bom, text):
+    with open(path, "wb") as fh:
+        fh.write((BOM if bom else b"") + text.encode("utf-8"))
 
 
 def read_lines(path):

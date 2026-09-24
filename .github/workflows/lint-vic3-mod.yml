@@ -8,22 +8,71 @@ on:
         type: string
         required: false
         default: '.github/vic3-validate.json'
+      fix:
+        description: 'Repair the findings that have exactly one reading and commit the repair to the branch under lint.'
+        type: boolean
+        required: false
+        default: true
+    secrets:
+      push_token:
+        description: 'Token the repair is pushed with. Without it the push uses GITHUB_TOKEN, which starts no further workflow runs on the repaired commit.'
+        required: false
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: lint-vic3-mod-${{ github.head_ref || github.ref_name }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   lint:
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    env:
+      CAN_FIX: ${{ inputs.fix && github.ref_type == 'branch' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.CAN_FIX == 'true' && (github.head_ref || github.ref_name) || '' }}
+          token: ${{ secrets.push_token || github.token }}
 
       - uses: salva133/My-Workflows/.github/actions/vic3-validate@latest
         with:
           mode: lint
           config: ${{ inputs.config }}
+          fix: ${{ env.CAN_FIX }}
+
+      - name: Commit the repairs
+        if: ${{ !cancelled() && env.CAN_FIX == 'true' }}
+        env:
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: |
+          set -euo pipefail
+          for DIR in common events gui map_data localization; do
+            if [[ -d "$DIR" ]]; then
+              git add -A -- "$DIR"
+            fi
+          done
+
+          if git diff --staged --quiet; then
+            echo "✅ Nothing to repair."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "style: repair lint findings"
+
+          for attempt in 1 2 3 4 5; do
+            if git push origin "HEAD:$BRANCH"; then
+              echo "Pushed on attempt $attempt."
+              exit 0
+            fi
+            echo "Push attempt $attempt was rejected, rebasing onto the remote."
+            sleep $(( attempt * 2 ))
+            git pull --rebase --autostash origin "$BRANCH"
+          done
+
+          echo "::error title=Push failed::The repairs could not be pushed after 5 attempts."
+          exit 1

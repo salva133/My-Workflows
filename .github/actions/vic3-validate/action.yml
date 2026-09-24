@@ -18,6 +18,10 @@ inputs:
     description: 'Ref the change is measured against. Only the checks that read a diff use it, and they are skipped when it is empty.'
     required: false
     default: ''
+  fix:
+    description: 'In lint mode, repair the findings that have exactly one reading before reporting the rest.'
+    required: false
+    default: 'false'
   write-baseline:
     description: 'In drift mode, record the current vanilla state as the new baseline instead of reporting drift.'
     required: false
@@ -65,14 +69,15 @@ runs:
         set -uo pipefail
 
         STATUS=0
-        CONFIG='${{ inputs.config }}'
+        ARGS=(--mod . --config '${{ inputs.config }}')
+        if [[ '${{ inputs.fix }}' == 'true' ]]; then
+          ARGS+=(--fix)
+        fi
 
-        python3 "$GITHUB_ACTION_PATH/lint_script.py" \
-          --mod . --config "$CONFIG" || STATUS=1
+        python3 "$GITHUB_ACTION_PATH/lint_script.py" "${ARGS[@]}" || STATUS=1
         echo
 
-        python3 "$GITHUB_ACTION_PATH/lint_localization.py" \
-          --mod . --config "$CONFIG" || STATUS=1
+        python3 "$GITHUB_ACTION_PATH/lint_localization.py" "${ARGS[@]}" || STATUS=1
 
         exit $STATUS
 

@@ -16,6 +16,13 @@ screen. These checks read the files the way the parser does and say where.
   SCRIPT_INDENT     indentation in the other style than the one the config
                     asks for through lint_indent (tab or space)
 
+With --fix, the findings that have exactly one reading are repaired before the
+report is drawn: =< and => are turned into <= and >=, and indentation is
+converted to the lint_indent style at lint_indent_width columns per tab,
+rounding a stray space or two to the nearest tab. A
+lost brace, a string left open or an operator with no value is left for a
+person, since only they know where it belongs.
+
 Files matched by lint_exempt, and the vendored monoliths, are skipped.
 """
 
@@ -23,13 +30,21 @@ import argparse
 import fnmatch
 import sys
 
-from vic3lib import Report, load_config, read_text, walk_files
+from vic3lib import Report, load_config, read_raw, write_raw, walk_files
 
 SCRIPT_DIRS = ("common", "events", "gui", "map_data")
 SUFFIXES = (".txt", ".gui")
 OPERATORS = {"=", "==", "!=", "<", "<=", ">", ">=", "?="}
 OPERATOR_CHARS = "=<>!?"
+SWAPPED_OPERATORS = {"=<": "<=", "=>": ">="}
 WORD_STOP = set(OPERATOR_CHARS) | set('{}#"')
+
+
+class Silent:
+    def error(self, *args):
+        pass
+
+    warn = notice = error
 
 
 def matches(rel, patterns):
@@ -37,7 +52,7 @@ def matches(rel, patterns):
 
 
 def tokenize(text, rel, report):
-    """Yields (kind, value, line) with kind one of {, }, op, word, abort."""
+    """Yields (kind, value, line, offset) with kind one of {, }, op, word, abort."""
     index, line, size = 0, 1, len(text)
     while index < size:
         char = text[index]
@@ -64,30 +79,30 @@ def tokenize(text, rel, report):
                     "file as its content.",
                     rel, start_line,
                 )
-                yield "abort", None, start_line
+                yield "abort", None, start_line, index
                 return
             if line != start_line and rel.endswith(".txt"):
                 report.warn(
                     "SCRIPT_NEWLINE",
-                    f"Quoted string runs on to line {line}. A quote is most likely "
+                    f"Quoted string runs on to line {line}. Check that no quote was "
                     "left open here.",
                     rel, start_line,
                 )
-            yield "word", text[index:cursor + 1], start_line
+            yield "word", text[index:cursor + 1], start_line, index
             index = cursor + 1
         elif char in "{}":
-            yield char, char, line
+            yield char, char, line, index
             index += 1
         elif char in OPERATOR_CHARS:
             cursor = index
             while cursor < size and text[cursor] in OPERATOR_CHARS:
                 cursor += 1
-            yield "op", text[index:cursor], line
+            yield "op", text[index:cursor], line, index
             index = cursor
         elif text.startswith("@[", index):
             end = text.find("]", index)
             end = size if end < 0 else end + 1
-            yield "word", text[index:end], line
+            yield "word", text[index:end], line, index
             line += text.count("\n", index, end)
             index = end
         else:
@@ -95,13 +110,13 @@ def tokenize(text, rel, report):
             while (cursor < size and not text[cursor].isspace()
                    and text[cursor] not in WORD_STOP):
                 cursor += 1
-            yield "word", text[index:cursor], line
+            yield "word", text[index:cursor], line, index
             index = cursor
 
 
 def check_structure(text, rel, report):
     stack, pending = [], None
-    for kind, value, line in tokenize(text, rel, report):
+    for kind, value, line, _ in tokenize(text, rel, report):
         if kind == "abort":
             return
         if pending and kind in ("}", "op"):
@@ -165,10 +180,45 @@ def check_indent(text, rel, style, report):
         )
 
 
+def fix_operators(text, rel, report):
+    swaps = [(offset, value, line)
+             for kind, value, line, offset in tokenize(text, rel, Silent())
+             if kind == "op" and value in SWAPPED_OPERATORS]
+    for offset, value, line in reversed(swaps):
+        text = text[:offset] + SWAPPED_OPERATORS[value] + text[offset + len(value):]
+        report.notice("SCRIPT_FIXED",
+                      f"Turned '{value}' into '{SWAPPED_OPERATORS[value]}'.", rel, line)
+    return text
+
+
+def fix_indent(text, rel, style, width, report):
+    lines = text.splitlines(keepends=True)
+    changed = []
+    for number, line in enumerate(lines, 1):
+        stripped = line.lstrip(" \t")
+        if not stripped.strip("\r\n"):
+            continue
+        lead = line[:len(line) - len(stripped)]
+        columns = len(lead.expandtabs(width))
+        if style == "tab":
+            fixed = "\t" * ((columns + width // 2) // width)
+        else:
+            fixed = " " * columns
+        if fixed != lead:
+            lines[number - 1] = fixed + stripped
+            changed.append(number)
+    if changed:
+        report.notice("SCRIPT_FIXED",
+                      f"Re-indented {len(changed)} line(s) with {style}s.",
+                      rel, changed[0])
+    return "".join(lines)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--mod", default=".")
     parser.add_argument("--config", default=".github/vic3-validate.json")
+    parser.add_argument("--fix", action="store_true")
     args = parser.parse_args()
 
     config = load_config(args.mod, args.config)
@@ -181,12 +231,25 @@ def main():
         print(f"::error file={args.config}::lint_indent reads '{style}', "
               "where it takes tab or space.")
         sys.exit(1)
+    width = config.get("lint_indent_width", 4)
 
     for directory in SCRIPT_DIRS:
         for full, rel in walk_files(args.mod, SUFFIXES, directory):
             if matches(rel, exempt):
                 continue
-            text = read_text(full)
+            raw = read_raw(full)
+            if raw is None:
+                report.warn("SCRIPT_ENCODING", "File is not valid UTF-8, so it is not "
+                            "linted.", rel, 1)
+                continue
+            bom, text = raw
+            if args.fix:
+                fixed = fix_operators(text, rel, report)
+                if style:
+                    fixed = fix_indent(fixed, rel, style, width, report)
+                if fixed != text:
+                    write_raw(full, bom, fixed)
+                    text = fixed
             check_structure(text, rel, report)
             if style:
                 check_indent(text, rel, style, report)
