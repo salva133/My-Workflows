@@ -143,10 +143,13 @@ def check_vanilla_keys(mod_languages, vanilla_languages, override_file, report):
                     report.error("LOC_VANILLA_KEY", message, rel, line)
 
 
-def check_translation_gaps(mod_languages, report):
+def check_translation_gaps(mod_languages, report, override_file=None):
     english = mod_languages.get("english", {})
     if not english:
         return
+    if override_file:
+        english = {key: entries for key, entries in english.items()
+                   if entries[0][0] != override_file}
     for language, keys in sorted(mod_languages.items(), key=lambda item: item[0] or ""):
         if language in (None, "english") or not keys:
             continue
@@ -164,7 +167,8 @@ def check_translation_gaps(mod_languages, report):
             )
         extra = {}
         for key, entries in keys.items():
-            if key not in english:
+            if key not in english and not (
+                    override_file and entries[0][0] == override_for(override_file, language)):
                 extra.setdefault(entries[0][0], []).append(key)
         for rel, stale in sorted(extra.items()):
             shown = ", ".join(stale[:5]) + (", ..." if len(stale) > 5 else "")
@@ -190,7 +194,8 @@ def main():
     mod_languages = collect_loc_keys_by_language(args.mod)
     for language_keys in mod_languages.values():
         check_duplicates(language_keys, report)
-    check_translation_gaps(mod_languages, report)
+    check_translation_gaps(mod_languages, report,
+                           config.get("vanilla_override_localization_file"))
     mod_keys = collect_loc_keys(args.mod)
 
     if args.vanilla and os.path.isdir(args.vanilla):
