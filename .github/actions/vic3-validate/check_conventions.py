@@ -30,13 +30,15 @@ import re
 import subprocess
 import sys
 
-from vic3lib import LOC_LINE, Report, load_config, read_lines, walk_files
+from vic3lib import LOC_LINE, Report, load_config, loc_language, read_lines, walk_files
 
 ORDERED = re.compile(r"\bordered_\w+\s*=\s*\{")
 QUOTED = re.compile(r'"[^"]*"')
 PREFIX_DIRS = ("common", "events", "localization")
 
 DEV_NOTE = re.compile(r"\b(TODO|FIXME|WIP|XXX|PLACEHOLDER)\b", re.IGNORECASE)
+DEV_NOTE_UPPER = re.compile(r"\b(TODO|FIXME|WIP|XXX|PLACEHOLDER)\b")
+DEV_NOTE_WORDS = {"braz_por": "todo", "spanish": "todo"}
 META_TERM = re.compile(
     r"\b(mod|mods|modder|modders|modding|vanilla|version|versions|savegame|"
     r"savegames|load order|Steam Workshop|DLC)\b",
@@ -172,6 +174,8 @@ def check_meta_localization(mod_root, config, report):
                 continue
             found = []
             note = DEV_NOTE.search(value)
+            if note and note.group(0).lower() == DEV_NOTE_WORDS.get(loc_language(rel)):
+                note = DEV_NOTE_UPPER.search(value)
             if note:
                 found.append(f"the developer note '{note.group(0)}'")
             term = META_TERM.search(value)
