@@ -128,10 +128,33 @@ def is_replaced(rel_path, replace_paths):
     return False
 
 
+LOC_LANGUAGE = re.compile(r"_l_(\w+?)\.yml$")
+
+
+def loc_language(rel_path):
+    """The language a localization file is read as, taken from its name."""
+    match = LOC_LANGUAGE.search(os.path.basename(rel_path))
+    return match.group(1) if match else None
+
+
 def collect_loc_keys(root):
     """Maps a localization key to a list of (rel_path, line, value)."""
     keys = {}
+    for language_keys in collect_loc_keys_by_language(root).values():
+        for key, entries in language_keys.items():
+            keys.setdefault(key, []).extend(entries)
+    return keys
+
+
+def collect_loc_keys_by_language(root):
+    """Maps a language to its own map of key -> list of (rel_path, line, value).
+
+    Every language is a database of its own: the same key in the german and
+    the english file is a translation, not a duplicate.
+    """
+    languages = {}
     for full, rel in walk_files(root, (".yml",), "localization"):
+        keys = languages.setdefault(loc_language(rel), {})
         for number, line in enumerate(read_lines(full), 1):
             match = LOC_LINE.match(line)
             if match:
@@ -140,7 +163,7 @@ def collect_loc_keys(root):
             key = LOC_KEY.match(line)
             if key:
                 keys.setdefault(key.group(1), []).append((rel, number, None))
-    return keys
+    return languages
 
 
 def collect_top_level_keys(root, subdir):
