@@ -3,6 +3,11 @@ name: Tag Vic3 Mod
 on:
   workflow_call:
     inputs:
+      mod_path:
+        description: 'Path to the mod root, the folder holding .metadata/metadata.json.'
+        type: string
+        required: false
+        default: '.'
       tag_prefix:
         description: 'Put in front of the metadata.json version to form the tag.'
         type: string
@@ -13,7 +18,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: tag-vic3-mod-${{ github.ref_name }}
+  group: tag-vic3-mod-${{ github.ref_name }}-${{ inputs.mod_path }}
   cancel-in-progress: false
 
 jobs:
@@ -29,6 +34,7 @@ jobs:
 
       - name: Read the mod version
         id: metadata
+        working-directory: ${{ inputs.mod_path }}
         env:
           TAG_PREFIX: ${{ inputs.tag_prefix }}
         run: |

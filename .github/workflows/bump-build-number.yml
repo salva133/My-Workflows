@@ -7,13 +7,18 @@ on:
         description: "Pull Request Number"
         required: true
         type: number
+      mod_path:
+        description: 'Path to the mod root, the folder holding .metadata/metadata.json.'
+        type: string
+        required: false
+        default: '.'
 
 permissions:
   contents: write
   pull-requests: read
 
 concurrency:
-  group: bump-build-number-${{ github.repository }}
+  group: bump-build-number-${{ github.repository }}-${{ inputs.mod_path }}
   cancel-in-progress: false
 
 jobs:
@@ -40,6 +45,7 @@ jobs:
 
       - name: Bump version by commit count
         id: bump
+        working-directory: ${{ inputs.mod_path }}
         if: steps.commit-count.outputs.commit_count != '0'
         env:
           BUMP_BY: ${{ steps.commit-count.outputs.commit_count }}
@@ -90,6 +96,7 @@ jobs:
 
       - name: Commit & Push version bump
         if: steps.bump.outcome == 'success'
+        working-directory: ${{ inputs.mod_path }}
         env:
           BRANCH: ${{ github.event.repository.default_branch }}
           COMMIT_COUNT: ${{ steps.commit-count.outputs.commit_count }}

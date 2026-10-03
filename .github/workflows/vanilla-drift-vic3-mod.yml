@@ -3,6 +3,11 @@ name: Vanilla Drift
 on:
   workflow_call:
     inputs:
+      mod_path:
+        description: 'Path to the mod root, the folder holding .metadata/metadata.json.'
+        type: string
+        required: false
+        default: '.'
       vanilla_repo:
         description: 'Repository holding the vanilla script tree the copies are measured against.'
         type: string
@@ -14,7 +19,7 @@ on:
         required: false
         default: ''
       config:
-        description: 'Path to the mod-side validator config.'
+        description: 'Path to the mod-side validator config, relative to the mod root.'
         type: string
         required: false
         default: '.github/vic3-validate.json'
@@ -33,7 +38,7 @@ permissions:
   issues: write
 
 concurrency:
-  group: vanilla-drift-${{ github.ref_name }}
+  group: vanilla-drift-${{ github.ref_name }}-${{ inputs.mod_path }}
   cancel-in-progress: false
 
 jobs:
@@ -54,6 +59,7 @@ jobs:
       - uses: salva133/My-Workflows/.github/actions/vic3-validate@latest
         id: drift
         with:
+          mod-path: ${{ inputs.mod_path }}
           mode: drift
           vanilla-path: .vic3-vanilla
           config: ${{ inputs.config }}
@@ -61,6 +67,7 @@ jobs:
 
       - name: Record the new baseline
         if: ${{ success() && inputs.write_baseline }}
+        working-directory: ${{ inputs.mod_path }}
         env:
           BRANCH: ${{ github.ref_name }}
         run: |
@@ -95,7 +102,7 @@ jobs:
         if: ${{ failure() && steps.drift.outcome == 'failure' && !inputs.write_baseline }}
         env:
           GH_TOKEN: ${{ github.token }}
-          TITLE: 'Vanilla has moved under the vendored copies'
+          TITLE: "${{ inputs.mod_path == '.' && 'Vanilla has moved under the vendored copies' || format('Vanilla has moved under the vendored copies of {0}', inputs.mod_path) }}"
         run: |
           set -euo pipefail
 

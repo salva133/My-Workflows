@@ -2,16 +2,20 @@ name: 'Validate Vic3 Mod'
 description: 'Runs the localization, vanilla key, encoding, convention and asset checks over a Victoria 3 mod, the syntax lint over its script and localization files, or the vanilla drift check on its vendored copies.'
 
 inputs:
+  mod-path:
+    description: 'Path to the mod root, the folder holding .metadata/metadata.json. The config is read relative to it.'
+    required: false
+    default: '.'
   mode:
     description: 'validate runs the five checks a change is held to. lint reads the script and localization files for syntax the parser drops without saying so. drift compares the vendored copies against vanilla.'
     required: false
     default: 'validate'
   vanilla-path:
-    description: 'Path to a vanilla checkout. The vanilla-dependent checks are skipped when it is empty or absent.'
+    description: 'Path to a vanilla checkout, absolute or relative to the repository root. The vanilla-dependent checks are skipped when it is empty or absent.'
     required: false
     default: ''
   config:
-    description: 'Path to the mod-side validator config, relative to the repository root.'
+    description: 'Path to the mod-side validator config, relative to the mod root.'
     required: false
     default: '.github/vic3-validate.json'
   diff-base:
@@ -33,11 +37,17 @@ runs:
     - name: Run the validators
       if: ${{ inputs.mode == 'validate' }}
       shell: bash
+      working-directory: ${{ inputs.mod-path }}
+      env:
+        VIC3_ANNOTATION_PREFIX: ${{ inputs.mod-path }}
       run: |
         set -uo pipefail
 
         STATUS=0
         VANILLA='${{ inputs.vanilla-path }}'
+        if [[ -n "$VANILLA" && "$VANILLA" != /* ]]; then
+          VANILLA="$GITHUB_WORKSPACE/$VANILLA"
+        fi
         CONFIG='${{ inputs.config }}'
 
         python3 "$GITHUB_ACTION_PATH/check_localization.py" \
@@ -65,6 +75,9 @@ runs:
     - name: Run the linters
       if: ${{ inputs.mode == 'lint' }}
       shell: bash
+      working-directory: ${{ inputs.mod-path }}
+      env:
+        VIC3_ANNOTATION_PREFIX: ${{ inputs.mod-path }}
       run: |
         set -uo pipefail
 
@@ -84,10 +97,17 @@ runs:
     - name: Run the drift check
       if: ${{ inputs.mode == 'drift' }}
       shell: bash
+      working-directory: ${{ inputs.mod-path }}
+      env:
+        VIC3_ANNOTATION_PREFIX: ${{ inputs.mod-path }}
       run: |
         set -uo pipefail
 
-        ARGS=(--mod . --vanilla '${{ inputs.vanilla-path }}' --config '${{ inputs.config }}')
+        VANILLA='${{ inputs.vanilla-path }}'
+        if [[ -n "$VANILLA" && "$VANILLA" != /* ]]; then
+          VANILLA="$GITHUB_WORKSPACE/$VANILLA"
+        fi
+        ARGS=(--mod . --vanilla "$VANILLA" --config '${{ inputs.config }}')
         if [[ '${{ inputs.write-baseline }}' == 'true' ]]; then
           ARGS+=(--write-baseline)
         fi

@@ -116,7 +116,7 @@ def added_lines(mod_root, base):
     if merge_base.returncode != 0:
         print(f"::notice::Cannot reach {base}, so the comment check is skipped.")
         return
-    diff = git("diff", "--unified=0", merge_base.stdout.strip(), "HEAD",
+    diff = git("diff", "--relative", "--unified=0", merge_base.stdout.strip(), "HEAD",
                "--", "*.txt", "*.yml", "*.gui")
     if diff.returncode != 0:
         print("::notice::Cannot read the diff, so the comment check is skipped.")

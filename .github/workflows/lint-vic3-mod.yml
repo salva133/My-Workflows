@@ -3,8 +3,13 @@ name: Lint Vic3 Mod
 on:
   workflow_call:
     inputs:
+      mod_path:
+        description: 'Path to the mod root, the folder holding .metadata/metadata.json.'
+        type: string
+        required: false
+        default: '.'
       config:
-        description: 'Path to the mod-side validator config.'
+        description: 'Path to the mod-side validator config, relative to the mod root.'
         type: string
         required: false
         default: '.github/vic3-validate.json'
@@ -22,7 +27,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: lint-vic3-mod-${{ github.head_ref || github.ref_name }}
+  group: lint-vic3-mod-${{ github.head_ref || github.ref_name }}-${{ inputs.mod_path }}
   cancel-in-progress: false
 
 jobs:
@@ -39,12 +44,14 @@ jobs:
 
       - uses: salva133/My-Workflows/.github/actions/vic3-validate@latest
         with:
+          mod-path: ${{ inputs.mod_path }}
           mode: lint
           config: ${{ inputs.config }}
           fix: ${{ env.CAN_FIX }}
 
       - name: Commit the repairs
         if: ${{ !cancelled() && env.CAN_FIX == 'true' }}
+        working-directory: ${{ inputs.mod_path }}
         env:
           BRANCH: ${{ github.head_ref || github.ref_name }}
         run: |

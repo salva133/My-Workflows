@@ -30,7 +30,7 @@ import argparse
 import fnmatch
 import sys
 
-from vic3lib import Report, load_config, read_raw, write_raw, walk_files
+from vic3lib import Report, annotation_path, load_config, read_raw, write_raw, walk_files
 
 SCRIPT_DIRS = ("common", "events", "gui", "map_data")
 SUFFIXES = (".txt", ".gui")
@@ -228,7 +228,7 @@ def main():
     exempt += list(config.get("vendored_monoliths", {}))
     style = config.get("lint_indent", "")
     if style not in ("", "tab", "space"):
-        print(f"::error file={args.config}::lint_indent reads '{style}', "
+        print(f"::error file={annotation_path(args.config)}::lint_indent reads '{style}', "
               "where it takes tab or space.")
         sys.exit(1)
     width = config.get("lint_indent_width", 4)
