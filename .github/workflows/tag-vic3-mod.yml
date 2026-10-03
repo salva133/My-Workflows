@@ -13,6 +13,11 @@ on:
         type: string
         required: false
         default: 'v'
+      tag_branch_head:
+        description: 'Tag the head of the branch at the time the job runs instead of the commit that triggered the run, so commits pushed by jobs this one waits on are included.'
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: write
@@ -30,6 +35,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
+          ref: ${{ inputs.tag_branch_head && github.ref_name || '' }}
           fetch-depth: 0
 
       - name: Read the mod version
@@ -74,4 +80,4 @@ jobs:
 
           git tag -a "$TAG" -m "$TAG"
           git push origin "refs/tags/$TAG"
-          echo "→ tagged ${GITHUB_SHA} as $TAG"
+          echo "→ tagged $(git rev-parse HEAD) as $TAG"
