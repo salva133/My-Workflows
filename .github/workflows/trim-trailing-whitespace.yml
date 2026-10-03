@@ -2,6 +2,12 @@ name: Trim Trailing Whitespace
 
 on:
   workflow_call:
+    inputs:
+      paths:
+        description: 'Folders to trim, separated by spaces or newlines. The default trims the whole repository.'
+        type: string
+        required: false
+        default: '.'
 
 permissions:
   contents: write
@@ -20,10 +26,14 @@ jobs:
           ref: ${{ github.head_ref || github.ref_name }}
 
       - name: Remove trailing whitespace
+        env:
+          TRIM_PATHS: ${{ inputs.paths }}
         run: |
           set -euo pipefail
-          git ls-files -z --cached --exclude-standard -- '*.txt' '*.yml' |
-          xargs -0 --no-run-if-empty sed -i 's/[[:space:]]*$//'
+          for DIR in $TRIM_PATHS; do
+            git -C "$DIR" ls-files -z --cached --exclude-standard -- '*.txt' '*.yml' |
+            (cd "$DIR" && xargs -0 --no-run-if-empty sed -i 's/[[:space:]]*$//')
+          done
 
       - uses: stefanzweifel/git-auto-commit-action@28e16e81777b558cc906c8750092100bbb34c5e3 # v7.0.0
         with:

@@ -3,6 +3,11 @@ name: Create steam_desc from README
 on:
   workflow_call:
     inputs:
+      mod_path:
+        description: 'Path to the mod root, the folder holding README.md.'
+        type: string
+        required: false
+        default: '.'
       scripts_ref:
         description: 'Ref of My-Workflows the conversion script is taken from.'
         type: string
@@ -13,7 +18,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: steam-desc-${{ github.head_ref || github.ref_name }}
+  group: steam-desc-${{ github.head_ref || github.ref_name }}-${{ inputs.mod_path }}
   cancel-in-progress: false
 
 jobs:
@@ -38,9 +43,11 @@ jobs:
           persist-credentials: false
 
       - name: Generate steam_desc.txt (Markdown → Steam BBCode)
-        run: python3 .workflow-scripts/.github/scripts/md_to_bbcode.py
+        working-directory: ${{ inputs.mod_path }}
+        run: python3 "$GITHUB_WORKSPACE/.workflow-scripts/.github/scripts/md_to_bbcode.py"
 
       - name: Commit and push if changed
+        working-directory: ${{ inputs.mod_path }}
         env:
           BRANCH: ${{ github.head_ref || github.ref_name }}
         run: |

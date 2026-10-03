@@ -3,17 +3,27 @@ name: Tag Vic3 Mod
 on:
   workflow_call:
     inputs:
+      mod_path:
+        description: 'Path to the mod root, the folder holding .metadata/metadata.json.'
+        type: string
+        required: false
+        default: '.'
       tag_prefix:
         description: 'Put in front of the metadata.json version to form the tag.'
         type: string
         required: false
         default: 'v'
+      tag_branch_head:
+        description: 'Tag the head of the branch at the time the job runs instead of the commit that triggered the run, so commits pushed by jobs this one waits on are included.'
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: write
 
 concurrency:
-  group: tag-vic3-mod-${{ github.ref_name }}
+  group: tag-vic3-mod-${{ github.ref_name }}-${{ inputs.mod_path }}
   cancel-in-progress: false
 
 jobs:
@@ -25,10 +35,12 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
+          ref: ${{ inputs.tag_branch_head && github.ref_name || '' }}
           fetch-depth: 0
 
       - name: Read the mod version
         id: metadata
+        working-directory: ${{ inputs.mod_path }}
         env:
           TAG_PREFIX: ${{ inputs.tag_prefix }}
         run: |
@@ -68,4 +80,4 @@ jobs:
 
           git tag -a "$TAG" -m "$TAG"
           git push origin "refs/tags/$TAG"
-          echo "→ tagged ${GITHUB_SHA} as $TAG"
+          echo "→ tagged $(git rev-parse HEAD) as $TAG"

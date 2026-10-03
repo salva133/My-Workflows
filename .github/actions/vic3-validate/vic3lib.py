@@ -16,6 +16,13 @@ BOM = b"\xef\xbb\xbf"
 ENTRY_MODES = ("REPLACE:", "TRY_REPLACE:", "INJECT:", "TRY_INJECT:")
 
 
+def annotation_path(path):
+    prefix = os.environ.get("VIC3_ANNOTATION_PREFIX", "").strip("/")
+    if not prefix or prefix == ".":
+        return path
+    return f"{prefix}/{path}"
+
+
 class Report:
     """Collects findings and prints them as GitHub Actions annotations."""
 
@@ -28,7 +35,7 @@ class Report:
     def _emit(self, level, code, message, path=None, line=None):
         loc = ""
         if path:
-            loc = f" file={path}"
+            loc = f" file={annotation_path(path)}"
             if line:
                 loc += f",line={line}"
         print(f"::{level}{loc},title={code}::{message}")
@@ -106,7 +113,7 @@ def load_config(mod_root, config_path):
     try:
         return json.loads(read_text(full))
     except ValueError as exc:
-        print(f"::error file={config_path}::Config is not valid JSON: {exc}")
+        print(f"::error file={annotation_path(config_path)}::Config is not valid JSON: {exc}")
         sys.exit(1)
 
 

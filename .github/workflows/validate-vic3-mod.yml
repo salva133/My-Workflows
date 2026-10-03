@@ -3,6 +3,11 @@ name: Validate Vic3 Mod
 on:
   workflow_call:
     inputs:
+      mod_path:
+        description: 'Path to the mod root, the folder holding .metadata/metadata.json.'
+        type: string
+        required: false
+        default: '.'
       vanilla_repo:
         description: 'Repository holding the vanilla script tree the mod is checked against.'
         type: string
@@ -14,7 +19,7 @@ on:
         required: false
         default: ''
       config:
-        description: 'Path to the mod-side validator config.'
+        description: 'Path to the mod-side validator config, relative to the mod root.'
         type: string
         required: false
         default: '.github/vic3-validate.json'
@@ -27,7 +32,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: validate-vic3-mod-${{ github.head_ref || github.ref_name }}
+  group: validate-vic3-mod-${{ github.head_ref || github.ref_name }}-${{ inputs.mod_path }}
   cancel-in-progress: true
 
 jobs:
@@ -67,6 +72,7 @@ jobs:
 
       - uses: salva133/My-Workflows/.github/actions/vic3-validate@latest
         with:
+          mod-path: ${{ inputs.mod_path }}
           vanilla-path: ${{ steps.token.outputs.available == 'true' && '.vic3-vanilla' || '' }}
           config: ${{ inputs.config }}
           diff-base: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.event.pull_request.base.ref) || '' }}
