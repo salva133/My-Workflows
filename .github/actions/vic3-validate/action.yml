@@ -1,5 +1,5 @@
 name: 'Validate Vic3 Mod'
-description: 'Runs the localization, vanilla key, encoding, convention and asset checks over a Victoria 3 mod, the syntax lint over its script and localization files, or the vanilla drift check on its vendored copies.'
+description: 'Runs the localization, vanilla key, encoding, convention, asset and land region checks over a Victoria 3 mod, the syntax lint over its script and localization files, or the vanilla drift check on its vendored copies.'
 
 inputs:
   mod-path:
@@ -7,7 +7,7 @@ inputs:
     required: false
     default: '.'
   mode:
-    description: 'validate runs the five checks a change is held to. lint reads the script and localization files for syntax the parser drops without saying so. drift compares the vendored copies against vanilla.'
+    description: 'validate runs the six checks a change is held to. lint reads the script and localization files for syntax the parser drops without saying so. drift compares the vendored copies against vanilla.'
     required: false
     default: 'validate'
   vanilla-path:
@@ -69,6 +69,10 @@ runs:
 
         python3 "$GITHUB_ACTION_PATH/check_assets.py" \
           --mod . --config "$CONFIG" || STATUS=1
+        echo
+
+        python3 "$GITHUB_ACTION_PATH/check_land_regions.py" \
+          --mod . --vanilla "$VANILLA" --config "$CONFIG" || STATUS=1
 
         exit $STATUS
 
