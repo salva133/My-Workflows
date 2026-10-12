@@ -11,6 +11,13 @@ Each check is opt-in, since the two mods this runs against hold different rules.
                   because the same rule leaves every comment already there alone,
                   and a vendored vanilla file is skipped, because the comments
                   arriving with it are vanilla's rather than the mod's
+  COMMENT_SHAPE   a comment added by the change under review that breaks the
+                  shape the mod allows: one '#' line above a block or one '#'
+                  trailing a line, shorter than comment_max_length, and never
+                  two whole-line comments in a row. Only added lines are
+                  judged, a neighbour already standing counts against one
+                  added beside it, and vendored copies are skipped as above,
+                  as is every file comment_shape_exempt matches
   META_LOC        out-of-game wording in a player-facing localization value,
                   where the mod's rule is that shown text stays in-universe.
                   Three classes are read: developer notes (TODO, WIP and kin),
@@ -162,6 +169,59 @@ def check_added_comments(mod_root, vanilla_root, config, base, report):
             )
 
 
+def comment_start(text):
+    """The column a comment starts at once quoted strings are blanked, or -1."""
+    return QUOTED.sub(lambda match: " " * len(match.group(0)), text).find("#")
+
+
+def check_comment_shape(mod_root, vanilla_root, config, base, report):
+    limit = config["comment_max_length"]
+    exempt = config.get("comment_shape_exempt", [])
+    added = {}
+    for rel, number, text in added_lines(mod_root, base):
+        if rel.startswith(".github/") or is_carried_copy(rel, vanilla_root, config):
+            continue
+        if matches(rel, exempt):
+            continue
+        if comment_start(text) >= 0:
+            added.setdefault(rel, set()).add(number)
+
+    for rel, numbers in sorted(added.items()):
+        full = os.path.join(mod_root, rel)
+        if not os.path.isfile(full):
+            continue
+        lines = read_lines(full)
+        whole = [False] * (len(lines) + 2)
+        for index, line in enumerate(lines, 1):
+            start = comment_start(line)
+            whole[index] = start >= 0 and not line[:start].strip()
+
+        for number in sorted(numbers):
+            if number > len(lines):
+                continue
+            line = lines[number - 1]
+            comment = line[comment_start(line):].rstrip()
+            if len(comment) >= limit:
+                report.error(
+                    "COMMENT_SHAPE",
+                    f"The comment runs {len(comment)} characters, and the limit is "
+                    f"under {limit}. The long form goes into the rules file and the "
+                    "comment points at it.",
+                    rel, number,
+                )
+            if not whole[number]:
+                continue
+            if whole[number - 1] and number - 1 in numbers:
+                continue
+            if whole[number - 1] or whole[number + 1]:
+                report.error(
+                    "COMMENT_SHAPE",
+                    "Two comment lines in a row. A comment is one line above the "
+                    "block it explains.",
+                    rel, number,
+                )
+
+
 def check_meta_localization(mod_root, config, report):
     exempt = config.get("meta_localization_exempt", [])
     for full, rel in walk_files(mod_root, (".yml",), "localization"):
@@ -227,6 +287,12 @@ def main():
             check_added_comments(args.mod, vanilla, config, args.diff_base, report)
         else:
             print("::notice::No base to diff against, so the comment check is skipped.")
+
+    if config.get("comment_max_length"):
+        if args.diff_base:
+            check_comment_shape(args.mod, vanilla, config, args.diff_base, report)
+        else:
+            print("::notice::No base to diff against, so the comment shape check is skipped.")
 
     sys.exit(report.finish())
 
